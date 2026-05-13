@@ -24,3 +24,4 @@
 - [x] GPS location capture on pick/drop timestamps
 - [x] Date range filter on run sheets list (Today, This Week, All)
 - [x] Push notifications for new run sheet assignments
+- [x] Configuration section in Settings for Frappe server URL, API key, API secret management

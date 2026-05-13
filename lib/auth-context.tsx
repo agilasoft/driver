@@ -8,6 +8,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (siteUrl: string, apiKey: string, apiSecret: string) => Promise<void>;
   logout: () => Promise<void>;
+  updateCredentials: (siteUrl: string, apiKey: string, apiSecret: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -15,6 +16,7 @@ const AuthContext = createContext<AuthContextType>({
   isLoading: true,
   login: async () => {},
   logout: async () => {},
+  updateCredentials: async () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -50,8 +52,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAuth(null);
   }, []);
 
+  const updateCredentials = useCallback(
+    async (siteUrl: string, apiKey: string, apiSecret: string) => {
+      // Re-login with new credentials (validates them and resolves driver)
+      const result = await apiLogin(siteUrl, apiKey, apiSecret);
+      // Clear notification cache so polling picks up new server
+      await clearNotificationCache();
+      setAuth(result);
+    },
+    []
+  );
+
   return (
-    <AuthContext.Provider value={{ auth, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ auth, isLoading, login, logout, updateCredentials }}>
       {children}
     </AuthContext.Provider>
   );
