@@ -19,6 +19,7 @@ import { ScreenContainer } from "@/components/screen-container";
 import { StatusBadge } from "@/components/status-badge";
 import { useColors } from "@/hooks/use-colors";
 import { useSync } from "@/lib/sync-context";
+import { useLocationCapture, type GpsCoords } from "@/hooks/use-location";
 import type { TransportLeg, PendingChange } from "@/lib/types";
 import {
   getCachedBundle,
@@ -34,6 +35,7 @@ export default function LegDetailScreen() {
   const router = useRouter();
   const colors = useColors();
   const { refreshPendingCount } = useSync();
+  const { captureLocation, isCapturing } = useLocationCapture();
 
   const [leg, setLeg] = useState<TransportLeg | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -48,6 +50,8 @@ export default function LegDetailScreen() {
   const [dropTimestamp, setDropTimestamp] = useState("");
   const [pickPhotoUri, setPickPhotoUri] = useState("");
   const [dropPhotoUri, setDropPhotoUri] = useState("");
+  const [pickGps, setPickGps] = useState<GpsCoords | null>(null);
+  const [dropGps, setDropGps] = useState<GpsCoords | null>(null);
 
   const loadLeg = useCallback(async () => {
     if (!runSheetId || !legId) return;
@@ -64,6 +68,21 @@ export default function LegDetailScreen() {
           setDropSignature(found.drop_signature || "");
           setPickTimestamp(found.start_date || "");
           setDropTimestamp(found.end_date || "");
+          // Restore GPS if previously saved
+          if (found.pick_latitude && found.pick_longitude) {
+            setPickGps({
+              latitude: found.pick_latitude,
+              longitude: found.pick_longitude,
+              accuracy: null,
+            });
+          }
+          if (found.drop_latitude && found.drop_longitude) {
+            setDropGps({
+              latitude: found.drop_latitude,
+              longitude: found.drop_longitude,
+              accuracy: null,
+            });
+          }
         }
       }
     } catch (error) {
@@ -96,12 +115,22 @@ export default function LegDetailScreen() {
     }, [legId])
   );
 
-  const recordTimestamp = (type: "pick" | "drop") => {
+  const recordTimestamp = async (type: "pick" | "drop") => {
     const now = new Date().toISOString().replace("T", " ").slice(0, 19);
     if (type === "pick") {
       setPickTimestamp(now);
     } else {
       setDropTimestamp(now);
+    }
+
+    // Capture GPS alongside the timestamp
+    const coords = await captureLocation();
+    if (coords) {
+      if (type === "pick") {
+        setPickGps(coords);
+      } else {
+        setDropGps(coords);
+      }
     }
   };
 
@@ -168,6 +197,16 @@ export default function LegDetailScreen() {
       }
       if (dropTimestamp || dropSignature) {
         changes.date_signed = new Date().toISOString().replace("T", " ").slice(0, 19);
+      }
+
+      // Include GPS coordinates
+      if (pickGps) {
+        changes.pick_latitude = pickGps.latitude;
+        changes.pick_longitude = pickGps.longitude;
+      }
+      if (dropGps) {
+        changes.drop_latitude = dropGps.latitude;
+        changes.drop_longitude = dropGps.longitude;
       }
 
       // Save pick photo as pending change
@@ -241,6 +280,11 @@ export default function LegDetailScreen() {
     } catch {
       return ts;
     }
+  };
+
+  const formatGps = (coords: GpsCoords | null) => {
+    if (!coords) return null;
+    return `${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`;
   };
 
   if (isLoading) {
@@ -334,7 +378,7 @@ export default function LegDetailScreen() {
 
           <View className="mx-4 mb-4">
             <View className="bg-surface rounded-2xl p-4 border border-border gap-4">
-              {/* Timestamp */}
+              {/* Timestamp + GPS */}
               <View>
                 <Text className="text-xs font-medium text-muted mb-1">Timestamp</Text>
                 <View className="flex-row items-center gap-2">
@@ -347,10 +391,31 @@ export default function LegDetailScreen() {
                     className="bg-primary rounded-xl px-4 py-2.5"
                     onPress={() => recordTimestamp("pick")}
                     activeOpacity={0.8}
+                    disabled={isCapturing}
                   >
-                    <Text className="text-white text-xs font-semibold">Now</Text>
+                    {isCapturing ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text className="text-white text-xs font-semibold">Now</Text>
+                    )}
                   </TouchableOpacity>
                 </View>
+                {pickGps ? (
+                  <View className="flex-row items-center gap-1 mt-1.5">
+                    <MaterialIcons name="gps-fixed" size={12} color={colors.success} />
+                    <Text className="text-xs text-success">{formatGps(pickGps)}</Text>
+                    {pickGps.accuracy != null ? (
+                      <Text className="text-xs text-muted ml-1">
+                        ({Math.round(pickGps.accuracy)}m)
+                      </Text>
+                    ) : null}
+                  </View>
+                ) : pickTimestamp ? (
+                  <View className="flex-row items-center gap-1 mt-1.5">
+                    <MaterialIcons name="gps-off" size={12} color={colors.muted} />
+                    <Text className="text-xs text-muted">No GPS recorded</Text>
+                  </View>
+                ) : null}
               </View>
 
               {/* Signature */}
@@ -418,7 +483,7 @@ export default function LegDetailScreen() {
 
           <View className="mx-4 mb-4">
             <View className="bg-surface rounded-2xl p-4 border border-border gap-4">
-              {/* Timestamp */}
+              {/* Timestamp + GPS */}
               <View>
                 <Text className="text-xs font-medium text-muted mb-1">Timestamp</Text>
                 <View className="flex-row items-center gap-2">
@@ -431,10 +496,31 @@ export default function LegDetailScreen() {
                     className="bg-primary rounded-xl px-4 py-2.5"
                     onPress={() => recordTimestamp("drop")}
                     activeOpacity={0.8}
+                    disabled={isCapturing}
                   >
-                    <Text className="text-white text-xs font-semibold">Now</Text>
+                    {isCapturing ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text className="text-white text-xs font-semibold">Now</Text>
+                    )}
                   </TouchableOpacity>
                 </View>
+                {dropGps ? (
+                  <View className="flex-row items-center gap-1 mt-1.5">
+                    <MaterialIcons name="gps-fixed" size={12} color={colors.success} />
+                    <Text className="text-xs text-success">{formatGps(dropGps)}</Text>
+                    {dropGps.accuracy != null ? (
+                      <Text className="text-xs text-muted ml-1">
+                        ({Math.round(dropGps.accuracy)}m)
+                      </Text>
+                    ) : null}
+                  </View>
+                ) : dropTimestamp ? (
+                  <View className="flex-row items-center gap-1 mt-1.5">
+                    <MaterialIcons name="gps-off" size={12} color={colors.muted} />
+                    <Text className="text-xs text-muted">No GPS recorded</Text>
+                  </View>
+                ) : null}
               </View>
 
               {/* Signature */}

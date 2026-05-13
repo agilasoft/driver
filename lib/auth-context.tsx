@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import type { AuthState } from "./types";
 import { login as apiLogin, logout as apiLogout, getStoredAuth } from "./frappe-api";
+import { clearNotificationCache } from "./notifications";
 
 interface AuthContextType {
   auth: AuthState | null;
@@ -44,6 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const logout = useCallback(async () => {
+    await clearNotificationCache();
     await apiLogout();
     setAuth(null);
   }, []);

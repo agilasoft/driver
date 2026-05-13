@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -6,17 +6,58 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import * as Notifications from "expo-notifications";
 import { ScreenContainer } from "@/components/screen-container";
 import { useAuth } from "@/lib/auth-context";
 import { useSync } from "@/lib/sync-context";
 import { useColors } from "@/hooks/use-colors";
+import {
+  requestNotificationPermissions,
+  startAssignmentPolling,
+  stopAssignmentPolling,
+} from "@/lib/notifications";
 
 export default function SettingsScreen() {
   const { auth, logout } = useAuth();
   const { isOnline, pendingCount, isSyncing, lastSync, syncNow } = useSync();
   const colors = useColors();
+  const [notifEnabled, setNotifEnabled] = useState(false);
+
+  // Check notification permission status
+  const checkNotifPermission = useCallback(async () => {
+    if (Platform.OS === "web") return;
+    const { status } = await Notifications.getPermissionsAsync();
+    setNotifEnabled(status === "granted");
+  }, []);
+
+  useEffect(() => {
+    checkNotifPermission();
+  }, [checkNotifPermission]);
+
+  const handleToggleNotifications = async () => {
+    if (notifEnabled) {
+      stopAssignmentPolling();
+      Alert.alert(
+        "Notifications Paused",
+        "Assignment polling has been stopped. To fully disable notifications, go to your device Settings."
+      );
+    } else {
+      const granted = await requestNotificationPermissions();
+      if (granted) {
+        setNotifEnabled(true);
+        startAssignmentPolling();
+        Alert.alert("Notifications Enabled", "You will be notified when new run sheets are assigned to you.");
+      } else {
+        Alert.alert(
+          "Permission Required",
+          "Please enable notifications in your device settings."
+        );
+      }
+    }
+  };
 
   const handleLogout = () => {
     Alert.alert("Sign Out", "Are you sure you want to sign out?", [
@@ -147,6 +188,33 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Notifications */}
+        <Text className="text-sm font-semibold text-muted mb-2 ml-1">NOTIFICATIONS</Text>
+        <View className="bg-surface rounded-2xl border border-border mb-4 overflow-hidden">
+          <SettingRow
+            icon="notifications"
+            iconColor={notifEnabled ? colors.success : colors.muted}
+            label="Assignment Alerts"
+            value={notifEnabled ? "Enabled" : "Disabled"}
+            valueColor={notifEnabled ? colors.success : colors.muted}
+          />
+          <View className="border-t border-border" />
+          <TouchableOpacity
+            className="flex-row items-center gap-3 px-4 py-3.5"
+            onPress={handleToggleNotifications}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons
+              name={notifEnabled ? "notifications-off" : "notifications-active"}
+              size={20}
+              color={colors.primary}
+            />
+            <Text className="text-sm font-medium text-primary flex-1">
+              {notifEnabled ? "Pause Notifications" : "Enable Notifications"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Sign Out */}
         <TouchableOpacity
           className="bg-surface rounded-2xl border border-border py-3.5 items-center mt-4"
@@ -158,7 +226,7 @@ export default function SettingsScreen() {
 
         {/* Version */}
         <Text className="text-xs text-muted text-center mt-6">
-          Driver v1.0.0
+          Driver v1.1.0
         </Text>
       </ScrollView>
     </ScreenContainer>

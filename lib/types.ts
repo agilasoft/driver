@@ -48,6 +48,11 @@ export interface TransportLeg {
   status: LegStatus;
   actual_distance_km: number;
   actual_duration_min: number;
+  // GPS coordinates captured at pick/drop
+  pick_latitude?: number;
+  pick_longitude?: number;
+  drop_latitude?: number;
+  drop_longitude?: number;
   // Aliases from API
   signature?: string;
   signed_by?: string;
@@ -77,6 +82,12 @@ export interface PendingChange {
   photoUri?: string;
   photoType?: "pick" | "drop";
   synced: boolean;
+}
+
+export interface GpsCoords {
+  latitude: number;
+  longitude: number;
+  accuracy: number | null;
 }
 
 export interface AuthState {

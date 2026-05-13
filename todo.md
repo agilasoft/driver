@@ -21,3 +21,6 @@
 - [x] Auto-sync when connectivity restored
 - [x] Unit tests for offline store and Frappe API
 - [x] Filter run sheets list by currently logged-in driver
+- [x] GPS location capture on pick/drop timestamps
+- [x] Date range filter on run sheets list (Today, This Week, All)
+- [x] Push notifications for new run sheet assignments

@@ -20,6 +20,14 @@ import { trpc, createTRPCClient } from "@/lib/trpc";
 import { initManusRuntime, subscribeSafeAreaInsets } from "@/lib/_core/manus-runtime";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { SyncProvider } from "@/lib/sync-context";
+import {
+  configureNotifications,
+  requestNotificationPermissions,
+  startAssignmentPolling,
+  stopAssignmentPolling,
+} from "@/lib/notifications";
+import { useRouter } from "expo-router";
+import * as Notifications from "expo-notifications";
 
 const DEFAULT_WEB_INSETS: EdgeInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 const DEFAULT_WEB_FRAME: Rect = { x: 0, y: 0, width: 0, height: 0 };
@@ -28,8 +36,42 @@ export const unstable_settings = {
   anchor: "(tabs)",
 };
 
+// Configure notifications at module level (before any component renders)
+configureNotifications();
+
 function AppNavigator() {
   const { auth, isLoading } = useAuth();
+  const router = useRouter();
+
+  // Start/stop assignment polling based on auth state
+  useEffect(() => {
+    if (auth?.isLoggedIn && auth.driverId) {
+      requestNotificationPermissions().then((granted) => {
+        if (granted) {
+          startAssignmentPolling();
+        }
+      });
+    } else {
+      stopAssignmentPolling();
+    }
+    return () => stopAssignmentPolling();
+  }, [auth?.isLoggedIn, auth?.driverId]);
+
+  // Handle notification taps — navigate to the run sheet
+  useEffect(() => {
+    const subscription = Notifications.addNotificationResponseReceivedListener(
+      (response) => {
+        const data = response.notification.request.content.data;
+        if (data?.runSheetId && auth?.isLoggedIn) {
+          router.push({
+            pathname: "/run-sheet/[id]",
+            params: { id: data.runSheetId as string },
+          });
+        }
+      }
+    );
+    return () => subscription.remove();
+  }, [auth?.isLoggedIn, router]);
 
   if (isLoading) {
     return (

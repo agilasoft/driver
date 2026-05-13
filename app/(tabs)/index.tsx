@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   RefreshControl,
   Pressable,
   ActivityIndicator,
+  TouchableOpacity,
 } from "react-native";
 import { useRouter } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
@@ -21,6 +22,23 @@ import {
   refreshRunSheets,
 } from "@/lib/offline-store";
 
+type DateFilter = "today" | "week" | "all";
+
+function getStartOfDay(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function getStartOfWeek(): Date {
+  const d = new Date();
+  const day = d.getDay(); // 0=Sun
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday
+  d.setDate(diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 export default function RunSheetsScreen() {
   const router = useRouter();
   const colors = useColors();
@@ -29,6 +47,7 @@ export default function RunSheetsScreen() {
   const [sheets, setSheets] = useState<RunSheet[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [dateFilter, setDateFilter] = useState<DateFilter>("all");
 
   const loadData = useCallback(async (showRefresh = false) => {
     if (showRefresh) setIsRefreshing(true);
@@ -55,6 +74,23 @@ export default function RunSheetsScreen() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Apply client-side date filter
+  const filteredSheets = useMemo(() => {
+    if (dateFilter === "all") return sheets;
+
+    const cutoff = dateFilter === "today" ? getStartOfDay() : getStartOfWeek();
+
+    return sheets.filter((s) => {
+      if (!s.run_date) return false;
+      try {
+        const runDate = new Date(s.run_date);
+        return runDate >= cutoff;
+      } catch {
+        return false;
+      }
+    });
+  }, [sheets, dateFilter]);
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "—";
@@ -139,7 +175,9 @@ export default function RunSheetsScreen() {
         <MaterialIcons name="description" size={48} color={colors.border} />
         <Text className="text-base text-muted mt-4">No run sheets found</Text>
         <Text className="text-sm text-muted mt-1">
-          {auth?.driverId
+          {dateFilter !== "all"
+            ? "Try selecting a different date range"
+            : auth?.driverId
             ? "No run sheets assigned to you"
             : "Pull down to refresh"}
         </Text>
@@ -147,15 +185,59 @@ export default function RunSheetsScreen() {
     );
   };
 
+  const filterOptions: { key: DateFilter; label: string }[] = [
+    { key: "today", label: "Today" },
+    { key: "week", label: "This Week" },
+    { key: "all", label: "All" },
+  ];
+
   return (
     <ScreenContainer>
       {/* Header */}
-      <View className="px-4 pt-2 pb-3">
+      <View className="px-4 pt-2 pb-2">
         <Text className="text-2xl font-bold text-foreground">Run Sheets</Text>
         {auth?.driverName ? (
           <Text className="text-sm text-muted mt-0.5">{auth.driverName}</Text>
         ) : auth?.fullName ? (
           <Text className="text-sm text-muted mt-0.5">{auth.fullName}</Text>
+        ) : null}
+      </View>
+
+      {/* Date Filter Chips */}
+      <View className="flex-row gap-2 px-4 pb-3">
+        {filterOptions.map((opt) => (
+          <TouchableOpacity
+            key={opt.key}
+            onPress={() => setDateFilter(opt.key)}
+            activeOpacity={0.7}
+            style={[
+              {
+                paddingHorizontal: 14,
+                paddingVertical: 7,
+                borderRadius: 20,
+                borderWidth: 1,
+                borderColor: dateFilter === opt.key ? colors.primary : colors.border,
+                backgroundColor: dateFilter === opt.key ? colors.primary : colors.surface,
+              },
+            ]}
+          >
+            <Text
+              style={{
+                fontSize: 13,
+                fontWeight: "600",
+                color: dateFilter === opt.key ? "#fff" : colors.muted,
+              }}
+            >
+              {opt.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+        {dateFilter !== "all" ? (
+          <View className="flex-1 items-end justify-center">
+            <Text className="text-xs text-muted">
+              {filteredSheets.length} of {sheets.length}
+            </Text>
+          </View>
         ) : null}
       </View>
 
@@ -168,11 +250,11 @@ export default function RunSheetsScreen() {
         </View>
       ) : (
         <FlatList
-          data={sheets}
+          data={filteredSheets}
           keyExtractor={(item) => item.name}
           renderItem={renderItem}
           ListEmptyComponent={renderEmpty}
-          contentContainerStyle={{ paddingTop: 4, paddingBottom: 20, flexGrow: sheets.length === 0 ? 1 : undefined }}
+          contentContainerStyle={{ paddingTop: 4, paddingBottom: 20, flexGrow: filteredSheets.length === 0 ? 1 : undefined }}
           refreshControl={
             <RefreshControl
               refreshing={isRefreshing}
