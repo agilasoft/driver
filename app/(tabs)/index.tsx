@@ -14,6 +14,7 @@ import { ConnectivityBanner } from "@/components/connectivity-banner";
 import { StatusBadge } from "@/components/status-badge";
 import { useColors } from "@/hooks/use-colors";
 import { useSync } from "@/lib/sync-context";
+import { useAuth } from "@/lib/auth-context";
 import type { RunSheet } from "@/lib/types";
 import {
   getCachedRunSheets,
@@ -24,6 +25,7 @@ export default function RunSheetsScreen() {
   const router = useRouter();
   const colors = useColors();
   const { isOnline } = useSync();
+  const { auth } = useAuth();
   const [sheets, setSheets] = useState<RunSheet[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -137,7 +139,9 @@ export default function RunSheetsScreen() {
         <MaterialIcons name="description" size={48} color={colors.border} />
         <Text className="text-base text-muted mt-4">No run sheets found</Text>
         <Text className="text-sm text-muted mt-1">
-          Pull down to refresh
+          {auth?.driverId
+            ? "No run sheets assigned to you"
+            : "Pull down to refresh"}
         </Text>
       </View>
     );
@@ -148,6 +152,11 @@ export default function RunSheetsScreen() {
       {/* Header */}
       <View className="px-4 pt-2 pb-3">
         <Text className="text-2xl font-bold text-foreground">Run Sheets</Text>
+        {auth?.driverName ? (
+          <Text className="text-sm text-muted mt-0.5">{auth.driverName}</Text>
+        ) : auth?.fullName ? (
+          <Text className="text-sm text-muted mt-0.5">{auth.fullName}</Text>
+        ) : null}
       </View>
 
       <ConnectivityBanner />

@@ -67,6 +67,30 @@ export async function login(
     // Ignore, use userName
   }
 
+  // Resolve the Driver record linked to this user
+  let driverId: string | undefined;
+  let driverName: string | undefined;
+  try {
+    // The Driver doctype in ERPNext has a user_id field that links to the User
+    const driverRes = await fetch(
+      `${baseUrl}/api/resource/Driver?filters=${encodeURIComponent(
+        JSON.stringify([["user_id", "=", userName]])
+      )}&fields=${encodeURIComponent(
+        JSON.stringify(["name", "driver_name"])
+      )}&limit_page_length=1`,
+      { headers }
+    );
+    if (driverRes.ok) {
+      const driverData = await driverRes.json();
+      if (driverData.data && driverData.data.length > 0) {
+        driverId = driverData.data[0].name;
+        driverName = driverData.data[0].driver_name || driverData.data[0].name;
+      }
+    }
+  } catch {
+    // If Driver lookup fails, we still allow login but won't filter
+  }
+
   const authState: AuthState = {
     siteUrl: baseUrl,
     apiKey,
@@ -74,6 +98,8 @@ export async function login(
     userName,
     fullName,
     isLoggedIn: true,
+    driverId,
+    driverName,
   };
 
   await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(authState));
@@ -93,8 +119,12 @@ export async function fetchRunSheets(): Promise<RunSheet[]> {
   const headers = await getHeaders();
   const auth = await getAuth();
 
-  // Fetch run sheets assigned to the current driver (or all if no driver filter)
-  const filters = JSON.stringify([["docstatus", "<", 2]]);
+  // Build filters — include driver filter when the logged-in user has a linked Driver record
+  const filterArray: any[][] = [["docstatus", "<", 2]];
+  if (auth?.driverId) {
+    filterArray.push(["driver", "=", auth.driverId]);
+  }
+  const filters = JSON.stringify(filterArray);
   const fields = JSON.stringify([
     "name",
     "run_date",

@@ -20,3 +20,4 @@
 - [x] Offline queue indicator (pending count badge)
 - [x] Auto-sync when connectivity restored
 - [x] Unit tests for offline store and Frappe API
+- [x] Filter run sheets list by currently logged-in driver

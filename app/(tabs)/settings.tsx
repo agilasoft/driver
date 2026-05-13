@@ -79,13 +79,28 @@ export default function SettingsScreen() {
             </View>
           </View>
 
-          <View className="border-t border-border pt-3 mt-1">
+          <View className="border-t border-border pt-3 mt-1 gap-2">
             <View className="flex-row items-center gap-2">
               <MaterialIcons name="language" size={16} color={colors.muted} />
               <Text className="text-xs text-muted flex-1" numberOfLines={1}>
                 {auth?.siteUrl}
               </Text>
             </View>
+            {auth?.driverId ? (
+              <View className="flex-row items-center gap-2">
+                <MaterialIcons name="badge" size={16} color={colors.primary} />
+                <Text className="text-xs text-primary flex-1" numberOfLines={1}>
+                  Driver: {auth.driverName || auth.driverId}
+                </Text>
+              </View>
+            ) : (
+              <View className="flex-row items-center gap-2">
+                <MaterialIcons name="warning" size={16} color={colors.warning} />
+                <Text className="text-xs text-warning flex-1" numberOfLines={2}>
+                  No Driver record linked to this user. All run sheets will be shown.
+                </Text>
+              </View>
+            )}
           </View>
         </View>
 

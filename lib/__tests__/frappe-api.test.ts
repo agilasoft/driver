@@ -28,7 +28,7 @@ beforeEach(() => {
 });
 
 describe("Frappe API - Authentication", () => {
-  it("logs in successfully with valid credentials", async () => {
+  it("logs in successfully with valid credentials and resolves driver", async () => {
     // Mock get_logged_user
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -40,6 +40,12 @@ describe("Frappe API - Authentication", () => {
       json: () =>
         Promise.resolve({ data: { full_name: "Admin User" } }),
     });
+    // Mock Driver lookup
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({ data: [{ name: "DRV-001", driver_name: "Admin Driver" }] }),
+    });
 
     const auth = await login("https://erp.test.com", "key123", "secret456");
 
@@ -49,10 +55,38 @@ describe("Frappe API - Authentication", () => {
     expect(auth.siteUrl).toBe("https://erp.test.com");
     expect(auth.apiKey).toBe("key123");
     expect(auth.apiSecret).toBe("secret456");
+    expect(auth.driverId).toBe("DRV-001");
+    expect(auth.driverName).toBe("Admin Driver");
 
     // Verify auth was stored
     const stored = await getStoredAuth();
     expect(stored?.isLoggedIn).toBe(true);
+    expect(stored?.driverId).toBe("DRV-001");
+  });
+
+  it("logs in without driver when no Driver record is linked", async () => {
+    // Mock get_logged_user
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ message: "admin@test.com" }),
+    });
+    // Mock User resource for full name
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({ data: { full_name: "Admin User" } }),
+    });
+    // Mock Driver lookup - no results
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ data: [] }),
+    });
+
+    const auth = await login("https://erp.test.com", "key123", "secret456");
+
+    expect(auth.isLoggedIn).toBe(true);
+    expect(auth.driverId).toBeUndefined();
+    expect(auth.driverName).toBeUndefined();
   });
 
   it("throws on invalid credentials", async () => {
@@ -78,6 +112,11 @@ describe("Frappe API - Authentication", () => {
       json: () =>
         Promise.resolve({ data: { full_name: "Admin User" } }),
     });
+    // Mock Driver lookup
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ data: [] }),
+    });
 
     await login("https://erp.test.com", "key123", "secret456");
     await logout();
@@ -100,6 +139,11 @@ describe("Frappe API - Authentication", () => {
       ok: true,
       json: () =>
         Promise.resolve({ data: { full_name: "Admin User" } }),
+    });
+    // Mock Driver lookup
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ data: [] }),
     });
 
     const auth = await login("https://erp.test.com///", "key123", "secret456");

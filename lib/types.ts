@@ -86,4 +86,6 @@ export interface AuthState {
   userName: string;
   fullName: string;
   isLoggedIn: boolean;
+  driverId?: string;
+  driverName?: string;
 }
