@@ -1,0 +1,22 @@
+# Driver App TODO
+
+- [x] Configure theme colors (CargoNext branding)
+- [x] Generate app icon (steering wheel)
+- [x] Configure app name and branding in app.config.ts
+- [x] Login screen with Frappe site URL, API key, API secret
+- [x] Frappe API client (auth, fetch run sheets, update legs, upload files)
+- [x] Offline storage with AsyncStorage (run sheets, legs, pending changes)
+- [x] Sync engine (queue pending changes, push when online)
+- [x] Network connectivity detection and banner
+- [x] Run Sheets list screen (Home tab) with pull-to-refresh
+- [x] Run Sheet Detail screen with leg cards
+- [x] Leg Detail screen with Pick and Drop sections
+- [x] Signature capture modal (drawing canvas)
+- [x] Photo capture for pick and drop
+- [x] Timestamp recording for pick and drop
+- [x] Settings screen (server config, user info, logout, sync status)
+- [x] Tab navigation with Run Sheets and Settings tabs
+- [x] Stack navigation (Run Sheets → Detail → Leg Detail)
+- [x] Offline queue indicator (pending count badge)
+- [x] Auto-sync when connectivity restored
+- [x] Unit tests for offline store and Frappe API
