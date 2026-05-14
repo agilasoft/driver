@@ -25,12 +25,15 @@ import {
 } from "@/lib/offline-store";
 import { updateRunSheetStatus } from "@/lib/frappe-api";
 import { generateRunSheetPdf } from "@/lib/pdf-generator";
+import { useAuth } from "@/lib/auth-context";
+import { resolveAllLegCoordinates } from "@/lib/geocoding";
 
 export default function RunSheetDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const colors = useColors();
   const { isOnline, refreshPendingCount } = useSync();
+  const { auth } = useAuth();
   const [bundle, setBundle] = useState<RunSheetBundle | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -85,23 +88,46 @@ export default function RunSheetDetailScreen() {
     }
   };
 
-  const openRouteMap = () => {
-    if (!bundle) return;
-    const legsJson = JSON.stringify(
-      bundle.legs.map((l) => ({
-        name: l.name,
-        pickLat: l.pick_latitude || 0,
-        pickLng: l.pick_longitude || 0,
-        dropLat: l.drop_latitude || 0,
-        dropLng: l.drop_longitude || 0,
-        facilityFrom: l.facility_from || "Pick-up",
-        facilityTo: l.facility_to || "Drop-off",
-      }))
-    );
-    router.push({
-      pathname: "/route-map",
-      params: { legs: legsJson, title: id || "Route" },
-    });
+  const [isResolvingMap, setIsResolvingMap] = useState(false);
+
+  const openRouteMap = async () => {
+    if (!bundle || !auth) return;
+    setIsResolvingMap(true);
+    try {
+      const baseUrl = auth.siteUrl.replace(/\/+$/, "");
+      const headers = {
+        Authorization: `token ${auth.apiKey}:${auth.apiSecret}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      };
+
+      // Resolve coordinates from addresses
+      const resolved = await resolveAllLegCoordinates({
+        legs: bundle.legs,
+        baseUrl,
+        headers,
+      });
+
+      const legsJson = JSON.stringify(
+        resolved.map((r) => ({
+          name: r.legName,
+          pickLat: r.pickCoords?.latitude || 0,
+          pickLng: r.pickCoords?.longitude || 0,
+          dropLat: r.dropCoords?.latitude || 0,
+          dropLng: r.dropCoords?.longitude || 0,
+          facilityFrom: r.facilityFrom,
+          facilityTo: r.facilityTo,
+        }))
+      );
+      router.push({
+        pathname: "/route-map",
+        params: { legs: legsJson, title: id || "Route" },
+      });
+    } catch (error) {
+      Alert.alert("Error", "Failed to resolve route addresses. Please try again.");
+    } finally {
+      setIsResolvingMap(false);
+    }
   };
 
   const handleExportPdf = async () => {
@@ -396,12 +422,17 @@ export default function RunSheetDetailScreen() {
           {/* Action Buttons */}
           <View style={styles.actionRow}>
             <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: colors.primary }]}
+              style={[styles.actionBtn, { backgroundColor: colors.primary, opacity: isResolvingMap ? 0.7 : 1 }]}
               onPress={openRouteMap}
               activeOpacity={0.8}
+              disabled={isResolvingMap}
             >
-              <MaterialIcons name="map" size={20} color="#fff" />
-              <Text style={styles.actionBtnText}>Route Map</Text>
+              {isResolvingMap ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <MaterialIcons name="map" size={20} color="#fff" />
+              )}
+              <Text style={styles.actionBtnText}>{isResolvingMap ? "Loading..." : "Route Map"}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity

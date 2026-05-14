@@ -341,17 +341,88 @@ export async function fetchRunSheetBundle(
   const baseUrl = await getBaseUrl();
   const headers = await getHeaders();
 
-  const url = `${baseUrl}/api/method/logistics.transport.api.get_run_sheet_bundle?name=${encodeURIComponent(
-    name
-  )}`;
-
-  const res = await fetch(url, { headers });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch run sheet bundle: ${res.status}`);
+  // Strategy 1: Try the custom bundle API endpoint
+  try {
+    const url = `${baseUrl}/api/method/logistics.transport.api.get_run_sheet_bundle?name=${encodeURIComponent(
+      name
+    )}`;
+    const res = await fetch(url, { headers });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.message) {
+        return data.message as RunSheetBundle;
+      }
+    }
+  } catch {
+    // Fall through to REST fallback
   }
 
-  const data = await res.json();
-  return data.message as RunSheetBundle;
+  // Strategy 2: Fetch run sheet + legs separately via REST
+  const docRes = await fetch(
+    `${baseUrl}/api/resource/Run Sheet/${encodeURIComponent(name)}`,
+    { headers }
+  );
+  if (!docRes.ok) {
+    throw new Error(`Failed to fetch run sheet: ${docRes.status}`);
+  }
+  const docData = await docRes.json();
+  const doc = docData.data as RunSheet;
+
+  // Fetch legs linked to this run sheet
+  const legsFields = JSON.stringify([
+    "name", "date", "transport_job", "vehicle_type",
+    "facility_type_from", "facility_from", "pick_address",
+    "facility_type_to", "facility_to", "drop_address",
+    "start_date", "end_date", "distance_km", "duration_min",
+    "pick_signature", "pick_signed_by", "drop_signature", "drop_signed_by",
+    "date_signed", "status", "actual_distance_km", "actual_duration_min",
+    "pick_latitude", "pick_longitude", "drop_latitude", "drop_longitude"
+  ]);
+
+  // Try fetching legs from Run Sheet Leg child table
+  let legs: TransportLeg[] = [];
+  try {
+    const legsUrl = `${baseUrl}/api/resource/Run Sheet Leg?filters=${encodeURIComponent(
+      JSON.stringify([["parent", "=", name]])
+    )}&fields=${encodeURIComponent('["transport_leg"]')}&limit_page_length=100`;
+    const legsRes = await fetch(legsUrl, { headers });
+    if (legsRes.ok) {
+      const legsData = await legsRes.json();
+      const legNames = (legsData.data || []).map((l: any) => l.transport_leg);
+      // Fetch each transport leg
+      for (const legName of legNames) {
+        if (!legName) continue;
+        try {
+          const legRes = await fetch(
+            `${baseUrl}/api/resource/Transport Leg/${encodeURIComponent(legName)}?fields=${encodeURIComponent(legsFields)}`,
+            { headers }
+          );
+          if (legRes.ok) {
+            const legData = await legRes.json();
+            if (legData.data) legs.push(legData.data);
+          }
+        } catch {
+          // Skip this leg
+        }
+      }
+    }
+  } catch {
+    // If Run Sheet Leg doesn't work, try Transport Leg directly
+    try {
+      const legUrl = `${baseUrl}/api/resource/Transport Leg?filters=${encodeURIComponent(
+        JSON.stringify([["run_sheet", "=", name]])
+      )}&fields=${encodeURIComponent(legsFields)}&limit_page_length=100`;
+      const legRes = await fetch(legUrl, { headers });
+      if (legRes.ok) {
+        const legData = await legRes.json();
+        legs = legData.data || [];
+      }
+    } catch {
+      // No legs found
+    }
+  }
+
+  return { doc, legs };
 }
 
 export async function updateTransportLeg(

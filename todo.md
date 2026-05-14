@@ -35,3 +35,4 @@
 - [x] Fix: Driver lookup must use user_id field on Driver doctype directly, remove manual linking
 - [x] Make app more mobile-friendly (larger touch targets, better spacing, improved readability)
 - [x] Add Map tab showing current active run sheet route
+- [x] Fix: Route map should geocode leg addresses automatically instead of requiring coordinates
