@@ -6,6 +6,8 @@ import {
   RefreshControl,
   Pressable,
   ActivityIndicator,
+  Alert,
+  TouchableOpacity,
 } from "react-native";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
@@ -14,17 +16,24 @@ import { ConnectivityBanner } from "@/components/connectivity-banner";
 import { StatusBadge } from "@/components/status-badge";
 import { useColors } from "@/hooks/use-colors";
 import { useSync } from "@/lib/sync-context";
-import type { RunSheetBundle, TransportLeg } from "@/lib/types";
-import { getCachedBundle, refreshBundle } from "@/lib/offline-store";
+import type { RunSheetBundle, TransportLeg, PendingStatusChange } from "@/lib/types";
+import {
+  getCachedBundle,
+  refreshBundle,
+  addPendingStatusChange,
+  applyLocalStatusChange,
+} from "@/lib/offline-store";
+import { updateRunSheetStatus } from "@/lib/frappe-api";
 
 export default function RunSheetDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const colors = useColors();
-  const { isOnline } = useSync();
+  const { isOnline, refreshPendingCount } = useSync();
   const [bundle, setBundle] = useState<RunSheetBundle | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   const loadData = useCallback(
     async (showRefresh = false) => {
@@ -169,6 +178,172 @@ export default function RunSheetDetailScreen() {
     </Pressable>
   );
 
+  // Build leg points for the map
+  const mapLegPoints = useCallback(() => {
+    if (!bundle) return [];
+    return bundle.legs.map((leg) => ({
+      name: leg.name,
+      pickLat: leg.pick_latitude || 0,
+      pickLng: leg.pick_longitude || 0,
+      dropLat: leg.drop_latitude || 0,
+      dropLng: leg.drop_longitude || 0,
+      facilityFrom: leg.facility_from || "Pick-up",
+      facilityTo: leg.facility_to || "Drop-off",
+    }));
+  }, [bundle]);
+
+  const openRouteMap = () => {
+    const points = mapLegPoints();
+    const hasAnyCoords = points.some(
+      (p) => (p.pickLat && p.pickLng) || (p.dropLat && p.dropLng)
+    );
+    if (!hasAnyCoords) {
+      Alert.alert(
+        "No GPS Data",
+        "No GPS coordinates have been recorded for any legs yet. Record timestamps on legs to capture GPS locations."
+      );
+      return;
+    }
+    router.push({
+      pathname: "/route-map",
+      params: {
+        legs: JSON.stringify(points),
+        runSheetName: id || "Route Map",
+      },
+    });
+  };
+
+  const handleStatusUpdate = async (newStatus: string) => {
+    if (!id || !bundle) return;
+    const currentStatus = bundle.doc.status;
+
+    Alert.alert(
+      "Update Status",
+      `Change status from "${currentStatus}" to "${newStatus}"?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Confirm",
+          onPress: async () => {
+            setIsUpdatingStatus(true);
+            try {
+              if (isOnline) {
+                // Try to update directly on the server
+                await updateRunSheetStatus(id, newStatus);
+              } else {
+                // Queue for offline sync
+                const change: PendingStatusChange = {
+                  runSheetName: id,
+                  status: newStatus,
+                  timestamp: new Date().toISOString(),
+                };
+                await addPendingStatusChange(change);
+                await refreshPendingCount();
+              }
+
+              // Apply locally regardless
+              await applyLocalStatusChange(id, newStatus);
+
+              // Reload the bundle to reflect the change
+              const updatedBundle = await getCachedBundle(id);
+              if (updatedBundle) setBundle(updatedBundle);
+
+              Alert.alert(
+                "Status Updated",
+                isOnline
+                  ? `Run sheet marked as "${newStatus}".`
+                  : `Status queued as "${newStatus}" and will sync when online.`
+              );
+            } catch (error: any) {
+              // If online update fails, queue offline
+              try {
+                const change: PendingStatusChange = {
+                  runSheetName: id,
+                  status: newStatus,
+                  timestamp: new Date().toISOString(),
+                };
+                await addPendingStatusChange(change);
+                await applyLocalStatusChange(id, newStatus);
+                await refreshPendingCount();
+                const updatedBundle = await getCachedBundle(id);
+                if (updatedBundle) setBundle(updatedBundle);
+                Alert.alert(
+                  "Queued",
+                  `Status change queued and will sync when possible.`
+                );
+              } catch {
+                Alert.alert("Error", error.message || "Failed to update status.");
+              }
+            } finally {
+              setIsUpdatingStatus(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const renderStatusActions = (currentStatus: string) => {
+    // Determine available status transitions
+    const transitions: { label: string; status: string; icon: string; color: string }[] = [];
+
+    if (currentStatus === "Dispatched" || currentStatus === "Draft") {
+      transitions.push({
+        label: "Start Trip",
+        status: "In-Progress",
+        icon: "play-arrow",
+        color: colors.warning,
+      });
+    }
+    if (currentStatus === "In-Progress") {
+      transitions.push({
+        label: "Complete Trip",
+        status: "Completed",
+        icon: "check-circle",
+        color: colors.success,
+      });
+      transitions.push({
+        label: "Hold Trip",
+        status: "Hold",
+        icon: "pause-circle-filled",
+        color: colors.warning,
+      });
+    }
+    if (currentStatus === "Hold") {
+      transitions.push({
+        label: "Resume Trip",
+        status: "In-Progress",
+        icon: "play-arrow",
+        color: colors.primary,
+      });
+    }
+
+    if (transitions.length === 0) return null;
+
+    return (
+      <View className="flex-row gap-2 mt-3">
+        {transitions.map((t) => (
+          <TouchableOpacity
+            key={t.status}
+            style={[{ backgroundColor: t.color, flex: 1, borderRadius: 12, paddingVertical: 10, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, opacity: isUpdatingStatus ? 0.6 : 1 }]}
+            onPress={() => handleStatusUpdate(t.status)}
+            activeOpacity={0.8}
+            disabled={isUpdatingStatus}
+          >
+            {isUpdatingStatus ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <>
+                <MaterialIcons name={t.icon as any} size={16} color="#fff" />
+                <Text style={{ color: "#fff", fontSize: 13, fontWeight: "600" }}>{t.label}</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        ))}
+      </View>
+    );
+  };
+
   const renderHeader = () => {
     if (!bundle) return null;
     const doc = bundle.doc;
@@ -193,6 +368,19 @@ export default function RunSheetDetailScreen() {
               <InfoRow icon="warehouse" label="Dispatch" value={doc.dispatch_terminal} colors={colors} />
             ) : null}
           </View>
+
+          {/* View Map Button */}
+          <TouchableOpacity
+            className="bg-primary rounded-xl py-2.5 mt-3 flex-row items-center justify-center gap-2"
+            onPress={openRouteMap}
+            activeOpacity={0.8}
+          >
+            <MaterialIcons name="map" size={18} color="#fff" />
+            <Text className="text-white text-sm font-semibold">View Route Map</Text>
+          </TouchableOpacity>
+
+          {/* Status Update Actions */}
+          {renderStatusActions(doc.status)}
         </View>
 
         <Text className="text-base font-semibold text-foreground mt-5 mb-2 ml-1">

@@ -4,9 +4,11 @@ import type {
   RunSheetBundle,
   TransportLeg,
   PendingChange,
+  PendingStatusChange,
 } from "./types";
 import {
   updateTransportLeg,
+  updateRunSheetStatus,
   uploadFile,
   fetchRunSheets,
   fetchRunSheetBundle,
@@ -144,6 +146,82 @@ export async function syncPendingChanges(): Promise<{
   }
 
   return { synced, failed, total: unsynced.length };
+}
+
+// ─── Run Sheet Status Changes (offline queue) ──────────────
+
+const PENDING_STATUS_KEY = "pending_status_changes";
+
+export async function getPendingStatusChanges(): Promise<PendingStatusChange[]> {
+  const raw = await AsyncStorage.getItem(PENDING_STATUS_KEY);
+  if (!raw) return [];
+  return JSON.parse(raw);
+}
+
+export async function addPendingStatusChange(
+  change: PendingStatusChange
+): Promise<void> {
+  const existing = await getPendingStatusChanges();
+  // Replace any existing pending change for the same run sheet
+  const filtered = existing.filter(
+    (c) => c.runSheetName !== change.runSheetName
+  );
+  filtered.push(change);
+  await AsyncStorage.setItem(PENDING_STATUS_KEY, JSON.stringify(filtered));
+}
+
+export async function removePendingStatusChange(
+  runSheetName: string
+): Promise<void> {
+  const existing = await getPendingStatusChanges();
+  const filtered = existing.filter((c) => c.runSheetName !== runSheetName);
+  await AsyncStorage.setItem(PENDING_STATUS_KEY, JSON.stringify(filtered));
+}
+
+// Apply status change locally to cached run sheets list
+export async function applyLocalStatusChange(
+  runSheetName: string,
+  status: string
+): Promise<void> {
+  const sheets = await getCachedRunSheets();
+  if (!sheets) return;
+  const updated = sheets.map((s) =>
+    s.name === runSheetName ? { ...s, status: status as any } : s
+  );
+  await cacheRunSheets(updated);
+
+  // Also update the bundle if cached
+  const bundle = await getCachedBundle(runSheetName);
+  if (bundle) {
+    const updatedBundle: RunSheetBundle = {
+      ...bundle,
+      doc: { ...bundle.doc, status: status as any },
+    };
+    await cacheBundle(runSheetName, updatedBundle);
+  }
+}
+
+// Sync pending status changes
+export async function syncPendingStatusChanges(): Promise<{
+  synced: number;
+  failed: number;
+}> {
+  const changes = await getPendingStatusChanges();
+  let synced = 0;
+  let failed = 0;
+
+  for (const change of changes) {
+    try {
+      await updateRunSheetStatus(change.runSheetName, change.status);
+      await removePendingStatusChange(change.runSheetName);
+      synced++;
+    } catch (error) {
+      console.warn(`Status sync failed for ${change.runSheetName}:`, error);
+      failed++;
+    }
+  }
+
+  return { synced, failed };
 }
 
 export async function getLastSyncTime(): Promise<string | null> {

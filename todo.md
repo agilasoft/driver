@@ -25,3 +25,6 @@
 - [x] Date range filter on run sheets list (Today, This Week, All)
 - [x] Push notifications for new run sheet assignments
 - [x] Configuration section in Settings for Frappe server URL, API key, API secret management
+- [x] Route map view for pick/drop locations on run sheet detail
+- [x] Barcode/QR scanning for package verification at pick/drop
+- [x] Run sheet status updates (In-Progress, Completed) from the app

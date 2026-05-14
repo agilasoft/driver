@@ -197,6 +197,30 @@ export async function updateTransportLeg(
   }
 }
 
+export async function updateRunSheetStatus(
+  runSheetName: string,
+  status: string
+): Promise<void> {
+  const baseUrl = await getBaseUrl();
+  const headers = await getHeaders();
+
+  // Use the Frappe REST API to update the Run Sheet status
+  const url = `${baseUrl}/api/resource/Run Sheet/${encodeURIComponent(
+    runSheetName
+  )}`;
+
+  const res = await fetch(url, {
+    method: "PUT",
+    headers,
+    body: JSON.stringify({ status }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to update run sheet status: ${res.status} ${text}`);
+  }
+}
+
 export async function uploadFile(
   fileUri: string,
   doctype: string,

@@ -27,6 +27,12 @@ import {
   addPendingChange,
 } from "@/lib/offline-store";
 
+interface BarcodeRecord {
+  data: string;
+  barcodeType: string;
+  timestamp: string;
+}
+
 export default function LegDetailScreen() {
   const { legId, runSheetId } = useLocalSearchParams<{
     legId: string;
@@ -52,6 +58,8 @@ export default function LegDetailScreen() {
   const [dropPhotoUri, setDropPhotoUri] = useState("");
   const [pickGps, setPickGps] = useState<GpsCoords | null>(null);
   const [dropGps, setDropGps] = useState<GpsCoords | null>(null);
+  const [pickBarcode, setPickBarcode] = useState<BarcodeRecord | null>(null);
+  const [dropBarcode, setDropBarcode] = useState<BarcodeRecord | null>(null);
 
   const loadLeg = useCallback(async () => {
     if (!runSheetId || !legId) return;
@@ -96,7 +104,20 @@ export default function LegDetailScreen() {
     loadLeg();
   }, [loadLeg]);
 
-  // Reload signature flags when returning from signature modal
+  // Load barcode scan results
+  const loadBarcodes = useCallback(async () => {
+    if (!legId) return;
+    try {
+      const pickRaw = await AsyncStorage.getItem(`barcode_${legId}_pick`);
+      if (pickRaw) setPickBarcode(JSON.parse(pickRaw));
+      const dropRaw = await AsyncStorage.getItem(`barcode_${legId}_drop`);
+      if (dropRaw) setDropBarcode(JSON.parse(dropRaw));
+    } catch {
+      // Ignore
+    }
+  }, [legId]);
+
+  // Reload signature flags and barcodes when returning from modals
   useFocusEffect(
     useCallback(() => {
       (async () => {
@@ -111,8 +132,10 @@ export default function LegDetailScreen() {
           const sigData = await AsyncStorage.getItem(`sig_${legId}_drop`);
           if (sigData) setDropSignature(sigData);
         }
+        // Reload barcodes
+        await loadBarcodes();
       })();
-    }, [legId])
+    }, [legId, loadBarcodes])
   );
 
   const recordTimestamp = async (type: "pick" | "drop") => {
@@ -137,6 +160,13 @@ export default function LegDetailScreen() {
   const captureSignature = (type: "pick" | "drop") => {
     router.push({
       pathname: "/signature-modal",
+      params: { type, legId: legId!, runSheetId: runSheetId! },
+    });
+  };
+
+  const openBarcodeScanner = (type: "pick" | "drop") => {
+    router.push({
+      pathname: "/barcode-scanner",
       params: { type, legId: legId!, runSheetId: runSheetId! },
     });
   };
@@ -475,6 +505,30 @@ export default function LegDetailScreen() {
                   )}
                 </TouchableOpacity>
               </View>
+
+              {/* Barcode Scan */}
+              <View>
+                <Text className="text-xs font-medium text-muted mb-1">Barcode / QR</Text>
+                <TouchableOpacity
+                  className="bg-background rounded-xl border border-border py-3 flex-row items-center justify-center gap-2"
+                  onPress={() => openBarcodeScanner("pick")}
+                  activeOpacity={0.8}
+                >
+                  {pickBarcode ? (
+                    <View className="flex-row items-center gap-2">
+                      <MaterialIcons name="qr-code" size={18} color={colors.success} />
+                      <Text className="text-sm text-success" numberOfLines={1}>
+                        {pickBarcode.data}
+                      </Text>
+                    </View>
+                  ) : (
+                    <View className="flex-row items-center gap-2">
+                      <MaterialIcons name="qr-code-scanner" size={18} color={colors.muted} />
+                      <Text className="text-sm text-muted">Scan barcode</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
 
@@ -576,6 +630,30 @@ export default function LegDetailScreen() {
                     <View className="h-24 items-center justify-center">
                       <MaterialIcons name="camera-alt" size={24} color={colors.muted} />
                       <Text className="text-xs text-muted mt-1">Tap to take photo</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {/* Barcode Scan */}
+              <View>
+                <Text className="text-xs font-medium text-muted mb-1">Barcode / QR</Text>
+                <TouchableOpacity
+                  className="bg-background rounded-xl border border-border py-3 flex-row items-center justify-center gap-2"
+                  onPress={() => openBarcodeScanner("drop")}
+                  activeOpacity={0.8}
+                >
+                  {dropBarcode ? (
+                    <View className="flex-row items-center gap-2">
+                      <MaterialIcons name="qr-code" size={18} color={colors.success} />
+                      <Text className="text-sm text-success" numberOfLines={1}>
+                        {dropBarcode.data}
+                      </Text>
+                    </View>
+                  ) : (
+                    <View className="flex-row items-center gap-2">
+                      <MaterialIcons name="qr-code-scanner" size={18} color={colors.muted} />
+                      <Text className="text-sm text-muted">Scan barcode</Text>
                     </View>
                   )}
                 </TouchableOpacity>

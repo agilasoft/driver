@@ -90,6 +90,12 @@ export interface GpsCoords {
   accuracy: number | null;
 }
 
+export interface PendingStatusChange {
+  runSheetName: string;
+  status: string;
+  timestamp: string;
+}
+
 export interface AuthState {
   siteUrl: string;
   apiKey: string;

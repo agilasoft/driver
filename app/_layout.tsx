@@ -102,6 +102,17 @@ function AppNavigator() {
                 headerShown: true,
               }}
             />
+            <Stack.Screen
+              name="route-map"
+              options={{ headerShown: true }}
+            />
+            <Stack.Screen
+              name="barcode-scanner"
+              options={{
+                presentation: "modal",
+                headerShown: true,
+              }}
+            />
           </>
         ) : (
           <Stack.Screen

@@ -10,6 +10,8 @@ import * as Network from "expo-network";
 import {
   getPendingChanges,
   syncPendingChanges,
+  syncPendingStatusChanges,
+  getPendingStatusChanges,
   getLastSyncTime,
 } from "./offline-store";
 
@@ -76,7 +78,8 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
   const refreshPendingCount = useCallback(async () => {
     const changes = await getPendingChanges();
     const unsynced = changes.filter((c) => !c.synced);
-    setPendingCount(unsynced.length);
+    const statusChanges = await getPendingStatusChanges();
+    setPendingCount(unsynced.length + statusChanges.length);
   }, []);
 
   const syncNow = useCallback(async () => {
@@ -86,6 +89,8 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
 
     try {
       const result = await syncPendingChanges();
+      // Also sync pending status changes
+      await syncPendingStatusChanges();
       const syncTime = await getLastSyncTime();
       setLastSync(syncTime);
       await refreshPendingCount();
