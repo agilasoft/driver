@@ -29,25 +29,62 @@ beforeEach(() => {
 
 // Helper: mock a successful JSON response
 function mockOk(data: any) {
-  return { ok: true, json: () => Promise.resolve(data) };
+  return { ok: true, json: () => Promise.resolve(data), text: () => Promise.resolve(JSON.stringify(data)) };
 }
 // Helper: mock a failed response
 function mockFail(status = 404) {
-  return { ok: false, status, text: () => Promise.resolve("Not Found") };
+  return { ok: false, status, text: () => Promise.resolve("Not Found"), json: () => Promise.resolve({}) };
+}
+
+/**
+ * The new login flow uses frappeGetList which tries RPC POST first, then REST GET.
+ * Strategy order:
+ *   1. Driver.user == userName  (RPC then REST)
+ *   2. Driver.user_id == userName  (RPC then REST)
+ *   3. Employee.user_id → Driver.employee  (RPC then REST for each)
+ *   4. Driver.full_name == fullName  (RPC then REST)
+ *   5. List all drivers and scan  (RPC then REST)
+ *
+ * For tests, we use mockFetch to handle all calls in order.
+ * Each frappeGetList call does: 1 RPC POST, then if empty 1 REST GET.
+ */
+
+// Helper to set up initial auth calls (get_logged_user + User full_name)
+function setupAuthCalls(email: string, fullName: string) {
+  // 1. get_logged_user
+  mockFetch.mockResolvedValueOnce(mockOk({ message: email }));
+  // 2. User full_name
+  mockFetch.mockResolvedValueOnce(mockOk({ data: { full_name: fullName } }));
+}
+
+// Helper: mock a frappeGetList that returns results on RPC call
+function mockRpcFound(results: any[]) {
+  mockFetch.mockResolvedValueOnce(mockOk({ message: results }));
+}
+
+// Helper: mock a frappeGetList that returns empty on RPC, then results on REST
+function mockRpcEmptyRestFound(results: any[]) {
+  mockFetch.mockResolvedValueOnce(mockOk({ message: [] })); // RPC empty
+  mockFetch.mockResolvedValueOnce(mockOk({ data: results })); // REST found
+}
+
+// Helper: mock a frappeGetList that returns empty on both RPC and REST
+function mockBothEmpty() {
+  mockFetch.mockResolvedValueOnce(mockOk({ message: [] })); // RPC empty
+  mockFetch.mockResolvedValueOnce(mockOk({ data: [] })); // REST empty
+}
+
+// Helper: mock a frappeGetList that fails on both RPC and REST
+function mockBothFail() {
+  mockFetch.mockRejectedValueOnce(new Error("Network error")); // RPC fail
+  mockFetch.mockResolvedValueOnce(mockFail(403)); // REST fail
 }
 
 describe("Frappe API - Authentication", () => {
-  it("logs in and resolves driver via Employee → Driver chain (Strategy 1)", async () => {
-    // 1. get_logged_user
-    mockFetch.mockResolvedValueOnce(mockOk({ message: "driver@test.com" }));
-    // 2. User full_name
-    mockFetch.mockResolvedValueOnce(mockOk({ data: { full_name: "John Driver" } }));
-    // 3. Strategy 1a: Employee lookup by user_id → found
-    mockFetch.mockResolvedValueOnce(mockOk({ data: [{ name: "HR-EMP-00001" }] }));
-    // 4. Strategy 1b: Driver lookup by employee → found
-    mockFetch.mockResolvedValueOnce(
-      mockOk({ data: [{ name: "HR-DRI-00001", full_name: "John Driver" }] })
-    );
+  it("logs in and resolves driver via Strategy 1 (Driver.user) using RPC", async () => {
+    setupAuthCalls("driver@test.com", "John Driver");
+    // Strategy 1: Driver.user == email → RPC found
+    mockRpcFound([{ name: "HR-DRI-00001", full_name: "John Driver" }]);
 
     const auth = await login("https://erp.test.com", "key123", "secret456");
 
@@ -56,83 +93,111 @@ describe("Frappe API - Authentication", () => {
     expect(auth.fullName).toBe("John Driver");
     expect(auth.driverId).toBe("HR-DRI-00001");
     expect(auth.driverName).toBe("John Driver");
-
-    // Verify Employee lookup was called
-    const empCall = mockFetch.mock.calls[2][0];
-    expect(empCall).toContain("/api/resource/Employee");
-    expect(empCall).toContain("user_id");
-
-    // Verify Driver-by-employee lookup was called
-    const drvCall = mockFetch.mock.calls[3][0];
-    expect(drvCall).toContain("/api/resource/Driver");
-    expect(drvCall).toContain("employee");
+    expect(auth.driverLinkError).toBeUndefined();
   });
 
-  it("falls back to Strategy 2 (user_id on Driver) when Employee not found", async () => {
-    // 1. get_logged_user
-    mockFetch.mockResolvedValueOnce(mockOk({ message: "driver@test.com" }));
-    // 2. User full_name
-    mockFetch.mockResolvedValueOnce(mockOk({ data: { full_name: "Jane Driver" } }));
-    // 3. Strategy 1a: Employee lookup → empty
-    mockFetch.mockResolvedValueOnce(mockOk({ data: [] }));
-    // 4. Strategy 2: Driver by user_id → found
-    mockFetch.mockResolvedValueOnce(
-      mockOk({ data: [{ name: "DRV-002", full_name: "Jane Driver" }] })
-    );
+  it("resolves driver via Strategy 1 REST fallback when RPC returns empty", async () => {
+    setupAuthCalls("driver@test.com", "Jane Driver");
+    // Strategy 1: RPC empty, REST found
+    mockRpcEmptyRestFound([{ name: "DRV-001", full_name: "Jane Driver" }]);
+
+    const auth = await login("https://erp.test.com", "key123", "secret456");
+
+    expect(auth.driverId).toBe("DRV-001");
+    expect(auth.driverName).toBe("Jane Driver");
+  });
+
+  it("falls back to Strategy 2 (Driver.user_id) when Strategy 1 empty", async () => {
+    setupAuthCalls("driver@test.com", "Jane Driver");
+    // Strategy 1: both empty
+    mockBothEmpty();
+    // Strategy 2: Driver.user_id → RPC found
+    mockRpcFound([{ name: "DRV-002", full_name: "Jane Driver" }]);
 
     const auth = await login("https://erp.test.com", "key123", "secret456");
 
     expect(auth.driverId).toBe("DRV-002");
     expect(auth.driverName).toBe("Jane Driver");
-
-    // Strategy 2 call should filter by user_id
-    const s2Call = mockFetch.mock.calls[3][0];
-    expect(s2Call).toContain("/api/resource/Driver");
-    expect(s2Call).toContain("user_id");
   });
 
-  it("falls back to Strategy 3 (full_name match) when Strategies 1 & 2 fail", async () => {
-    // 1. get_logged_user
-    mockFetch.mockResolvedValueOnce(mockOk({ message: "driver@test.com" }));
-    // 2. User full_name
-    mockFetch.mockResolvedValueOnce(mockOk({ data: { full_name: "Bob Smith" } }));
-    // 3. Strategy 1a: Employee lookup → empty
-    mockFetch.mockResolvedValueOnce(mockOk({ data: [] }));
-    // 4. Strategy 2: Driver by user_id → empty
-    mockFetch.mockResolvedValueOnce(mockOk({ data: [] }));
-    // 5. Strategy 3: Driver by full_name → found
-    mockFetch.mockResolvedValueOnce(
-      mockOk({ data: [{ name: "DRV-003", full_name: "Bob Smith" }] })
-    );
+  it("falls back to Strategy 3 (Employee→Driver chain) when 1 & 2 empty", async () => {
+    setupAuthCalls("driver@test.com", "Bob Smith");
+    // Strategy 1: both empty
+    mockBothEmpty();
+    // Strategy 2: both empty
+    mockBothEmpty();
+    // Strategy 3a: Employee.user_id → RPC found
+    mockRpcFound([{ name: "HR-EMP-00001" }]);
+    // Strategy 3b: Driver.employee → RPC found
+    mockRpcFound([{ name: "DRV-003", full_name: "Bob Smith" }]);
 
     const auth = await login("https://erp.test.com", "key123", "secret456");
 
     expect(auth.driverId).toBe("DRV-003");
     expect(auth.driverName).toBe("Bob Smith");
-
-    // Strategy 3 call should filter by full_name
-    const s3Call = mockFetch.mock.calls[4][0];
-    expect(s3Call).toContain("/api/resource/Driver");
-    expect(s3Call).toContain("full_name");
   });
 
-  it("logs in without driver when all strategies fail", async () => {
-    // 1. get_logged_user
-    mockFetch.mockResolvedValueOnce(mockOk({ message: "admin@test.com" }));
-    // 2. User full_name
-    mockFetch.mockResolvedValueOnce(mockOk({ data: { full_name: "Admin User" } }));
-    // 3. Strategy 1a: Employee lookup → empty
-    mockFetch.mockResolvedValueOnce(mockOk({ data: [] }));
-    // 4. Strategy 2: Driver by user_id → empty
-    mockFetch.mockResolvedValueOnce(mockOk({ data: [] }));
-    // 5. Strategy 3: Driver by full_name → empty
-    mockFetch.mockResolvedValueOnce(mockOk({ data: [] }));
+  it("falls back to Strategy 4 (full_name match) when 1-3 fail", async () => {
+    setupAuthCalls("driver@test.com", "Charlie Brown");
+    // Strategy 1: both empty
+    mockBothEmpty();
+    // Strategy 2: both empty
+    mockBothEmpty();
+    // Strategy 3a: Employee → both empty
+    mockBothEmpty();
+    // Strategy 4: Driver.full_name → RPC found
+    mockRpcFound([{ name: "DRV-004", full_name: "Charlie Brown" }]);
+
+    const auth = await login("https://erp.test.com", "key123", "secret456");
+
+    expect(auth.driverId).toBe("DRV-004");
+    expect(auth.driverName).toBe("Charlie Brown");
+  });
+
+  it("falls back to Strategy 5 (scan all drivers) when 1-4 fail", async () => {
+    setupAuthCalls("driver@test.com", "Dave Wilson");
+    // Strategy 1: both empty
+    mockBothEmpty();
+    // Strategy 2: both empty
+    mockBothEmpty();
+    // Strategy 3a: Employee → both empty
+    mockBothEmpty();
+    // Strategy 4: full_name → both empty
+    mockBothEmpty();
+    // Strategy 5: list all drivers → RPC returns list with a match
+    mockRpcFound([
+      { name: "DRV-010", full_name: "Other Person", user: "other@test.com", employee: "" },
+      { name: "DRV-011", full_name: "Dave Wilson", user: "driver@test.com", employee: "" },
+    ]);
+
+    const auth = await login("https://erp.test.com", "key123", "secret456");
+
+    expect(auth.driverId).toBe("DRV-011");
+    expect(auth.driverName).toBe("Dave Wilson");
+  });
+
+  it("logs in without driver when all 5 strategies fail", async () => {
+    setupAuthCalls("admin@test.com", "Admin User");
+    // Strategy 1: both empty
+    mockBothEmpty();
+    // Strategy 2: both empty
+    mockBothEmpty();
+    // Strategy 3a: Employee → both empty
+    mockBothEmpty();
+    // Strategy 4: full_name → both empty
+    mockBothEmpty();
+    // Strategy 5: list all → RPC returns drivers but no match
+    mockRpcFound([
+      { name: "DRV-010", full_name: "Other Person", user: "other@test.com", employee: "" },
+    ]);
 
     const auth = await login("https://erp.test.com", "key123", "secret456");
 
     expect(auth.isLoggedIn).toBe(true);
     expect(auth.driverId).toBeUndefined();
     expect(auth.driverName).toBeUndefined();
+    expect(auth.driverLinkError).toBeDefined();
+    expect(auth.driverLinkError).toContain("Strategy 1");
   });
 
   it("throws on invalid credentials", async () => {
@@ -148,12 +213,13 @@ describe("Frappe API - Authentication", () => {
   });
 
   it("logs out and clears stored auth", async () => {
-    // Login first (with all strategy calls)
-    mockFetch.mockResolvedValueOnce(mockOk({ message: "admin@test.com" }));
-    mockFetch.mockResolvedValueOnce(mockOk({ data: { full_name: "Admin" } }));
-    mockFetch.mockResolvedValueOnce(mockOk({ data: [] })); // Strategy 1
-    mockFetch.mockResolvedValueOnce(mockOk({ data: [] })); // Strategy 2
-    mockFetch.mockResolvedValueOnce(mockOk({ data: [] })); // Strategy 3
+    setupAuthCalls("admin@test.com", "Admin");
+    // All strategies empty
+    mockBothEmpty(); // S1
+    mockBothEmpty(); // S2
+    mockBothEmpty(); // S3 Employee
+    mockBothEmpty(); // S4 full_name
+    mockRpcFound([]); // S5 list all → empty
 
     await login("https://erp.test.com", "key123", "secret456");
     await logout();
@@ -168,31 +234,30 @@ describe("Frappe API - Authentication", () => {
   });
 
   it("strips trailing slashes from site URL", async () => {
-    mockFetch.mockResolvedValueOnce(mockOk({ message: "admin@test.com" }));
-    mockFetch.mockResolvedValueOnce(mockOk({ data: { full_name: "Admin" } }));
-    mockFetch.mockResolvedValueOnce(mockOk({ data: [] })); // Strategy 1
-    mockFetch.mockResolvedValueOnce(mockOk({ data: [] })); // Strategy 2
-    mockFetch.mockResolvedValueOnce(mockOk({ data: [] })); // Strategy 3
+    setupAuthCalls("admin@test.com", "Admin");
+    mockBothEmpty(); // S1
+    mockBothEmpty(); // S2
+    mockBothEmpty(); // S3
+    mockBothEmpty(); // S4
+    mockRpcFound([]); // S5
 
     const auth = await login("https://erp.test.com///", "key123", "secret456");
     expect(auth.siteUrl).toBe("https://erp.test.com");
   });
 
   it("handles network errors in driver strategies gracefully", async () => {
-    // 1. get_logged_user
-    mockFetch.mockResolvedValueOnce(mockOk({ message: "driver@test.com" }));
-    // 2. User full_name
-    mockFetch.mockResolvedValueOnce(mockOk({ data: { full_name: "Test" } }));
-    // 3. Strategy 1a: Employee lookup → network error
-    mockFetch.mockRejectedValueOnce(new Error("Network error"));
-    // 4. Strategy 2: Driver by user_id → network error
-    mockFetch.mockRejectedValueOnce(new Error("Network error"));
-    // 5. Strategy 3: Driver by full_name → network error
-    mockFetch.mockRejectedValueOnce(new Error("Network error"));
+    setupAuthCalls("driver@test.com", "Test");
+    // All strategies fail with network errors
+    mockBothFail(); // S1
+    mockBothFail(); // S2
+    mockBothFail(); // S3 Employee
+    mockBothFail(); // S4 full_name
+    mockBothFail(); // S5 list all
 
     // Should still login successfully, just without driver
     const auth = await login("https://erp.test.com", "key123", "secret456");
     expect(auth.isLoggedIn).toBe(true);
     expect(auth.driverId).toBeUndefined();
+    expect(auth.driverLinkError).toBeDefined();
   });
 });

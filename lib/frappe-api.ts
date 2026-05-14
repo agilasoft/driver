@@ -22,8 +22,68 @@ async function getHeaders(): Promise<Record<string, string>> {
 async function getBaseUrl(): Promise<string> {
   const auth = await getAuth();
   if (!auth) throw new Error("Not authenticated");
-  // Remove trailing slash
   return auth.siteUrl.replace(/\/+$/, "");
+}
+
+/**
+ * Helper: query a Frappe doctype using the frappe.client.get_list RPC method.
+ * This sometimes has different permission behaviour than the REST resource endpoint.
+ */
+async function frappeGetList(
+  baseUrl: string,
+  headers: Record<string, string>,
+  doctype: string,
+  filters: any[][],
+  fields: string[],
+  limit = 1
+): Promise<{ data: any[] | null; error: string | null }> {
+  try {
+    // Try RPC method first (often more permissive)
+    const rpcUrl = `${baseUrl}/api/method/frappe.client.get_list`;
+    const rpcRes = await fetch(rpcUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        doctype,
+        filters,
+        fields,
+        limit_page_length: limit,
+      }),
+    });
+    if (rpcRes.ok) {
+      const rpcData = await rpcRes.json();
+      const results = rpcData.message || [];
+      if (results.length > 0) {
+        return { data: results, error: null };
+      }
+      // RPC succeeded but returned empty — try REST as well
+    } else {
+      const rpcText = await rpcRes.text();
+      // Fall through to REST
+      console.log(`[Driver] RPC get_list for ${doctype} returned ${rpcRes.status}: ${rpcText.substring(0, 200)}`);
+    }
+  } catch (e: any) {
+    console.log(`[Driver] RPC get_list for ${doctype} threw: ${e.message}`);
+  }
+
+  // Fallback: REST resource endpoint
+  try {
+    const restUrl = `${baseUrl}/api/resource/${encodeURIComponent(doctype)}?filters=${encodeURIComponent(
+      JSON.stringify(filters)
+    )}&fields=${encodeURIComponent(
+      JSON.stringify(fields)
+    )}&limit_page_length=${limit}`;
+
+    const restRes = await fetch(restUrl, { method: "GET", headers });
+    if (restRes.ok) {
+      const restData = await restRes.json();
+      return { data: restData.data || [], error: null };
+    }
+    const restText = await restRes.text();
+    return { data: null, error: `REST ${restRes.status}: ${restText.substring(0, 200)}` };
+  } catch (e: any) {
+    return { data: null, error: `REST error: ${e.message}` };
+  }
 }
 
 export async function login(
@@ -67,94 +127,148 @@ export async function login(
     // Ignore, use userName
   }
 
-  // Resolve the Driver record linked to this user via multiple strategies
+  // Resolve the Driver record linked to this user
   let driverId: string | undefined;
   let driverName: string | undefined;
-  try {
-    // Strategy 1: Look up Employee linked to this user, then find Driver linked to that Employee
-    // ERPNext chain: User (email) → Employee (user_id) → Driver (employee)
-    try {
-      const empRes = await fetch(
-        `${baseUrl}/api/resource/Employee?filters=${encodeURIComponent(
-          JSON.stringify([["user_id", "=", userName]])
-        )}&fields=${encodeURIComponent(
-          JSON.stringify(["name"])
-        )}&limit_page_length=1`,
-        { headers }
+  const diagnostics: string[] = [];
+
+  // Strategy 1: Driver.user == logged-in user email (standard ERPNext field)
+  {
+    const result = await frappeGetList(
+      baseUrl,
+      headers,
+      "Driver",
+      [["user", "=", userName]],
+      ["name", "full_name"],
+      1
+    );
+    if (result.data && result.data.length > 0) {
+      driverId = result.data[0].name;
+      driverName = result.data[0].full_name || result.data[0].name;
+    } else {
+      diagnostics.push(
+        `Strategy 1 (Driver.user=${userName}): ${result.error || "no results"}`
       );
-      if (empRes.ok) {
-        const empData = await empRes.json();
-        if (empData.data && empData.data.length > 0) {
-          const employeeId = empData.data[0].name;
-          const driverRes = await fetch(
-            `${baseUrl}/api/resource/Driver?filters=${encodeURIComponent(
-              JSON.stringify([["employee", "=", employeeId]])
-            )}&fields=${encodeURIComponent(
-              JSON.stringify(["name", "full_name"])
-            )}&limit_page_length=1`,
-            { headers }
-          );
-          if (driverRes.ok) {
-            const driverData = await driverRes.json();
-            if (driverData.data && driverData.data.length > 0) {
-              driverId = driverData.data[0].name;
-              driverName = driverData.data[0].full_name || driverData.data[0].name;
-            }
-          }
-        }
-      }
-    } catch {
-      // Strategy 1 failed, continue to next
     }
-
-    // Strategy 2: Try direct user_id field on Driver (some setups add this)
-    if (!driverId) {
-      try {
-        const driverRes = await fetch(
-          `${baseUrl}/api/resource/Driver?filters=${encodeURIComponent(
-            JSON.stringify([["user_id", "=", userName]])
-          )}&fields=${encodeURIComponent(
-            JSON.stringify(["name", "full_name"])
-          )}&limit_page_length=1`,
-          { headers }
-        );
-        if (driverRes.ok) {
-          const driverData = await driverRes.json();
-          if (driverData.data && driverData.data.length > 0) {
-            driverId = driverData.data[0].name;
-            driverName = driverData.data[0].full_name || driverData.data[0].name;
-          }
-        }
-      } catch {
-        // Strategy 2 failed, continue to next
-      }
-    }
-
-    // Strategy 3: Match by full_name as a last resort
-    if (!driverId && fullName && fullName !== userName) {
-      try {
-        const driverRes = await fetch(
-          `${baseUrl}/api/resource/Driver?filters=${encodeURIComponent(
-            JSON.stringify([["full_name", "=", fullName]])
-          )}&fields=${encodeURIComponent(
-            JSON.stringify(["name", "full_name"])
-          )}&limit_page_length=1`,
-          { headers }
-        );
-        if (driverRes.ok) {
-          const driverData = await driverRes.json();
-          if (driverData.data && driverData.data.length > 0) {
-            driverId = driverData.data[0].name;
-            driverName = driverData.data[0].full_name || driverData.data[0].name;
-          }
-        }
-      } catch {
-        // Strategy 3 failed
-      }
-    }
-  } catch {
-    // If all Driver lookups fail, we still allow login but won't filter
   }
+
+  // Strategy 2: Try user_id field in case it's a custom field
+  if (!driverId) {
+    const result = await frappeGetList(
+      baseUrl,
+      headers,
+      "Driver",
+      [["user_id", "=", userName]],
+      ["name", "full_name"],
+      1
+    );
+    if (result.data && result.data.length > 0) {
+      driverId = result.data[0].name;
+      driverName = result.data[0].full_name || result.data[0].name;
+    } else {
+      diagnostics.push(
+        `Strategy 2 (Driver.user_id=${userName}): ${result.error || "no results"}`
+      );
+    }
+  }
+
+  // Strategy 3: Employee → Driver chain
+  if (!driverId) {
+    const empResult = await frappeGetList(
+      baseUrl,
+      headers,
+      "Employee",
+      [["user_id", "=", userName]],
+      ["name"],
+      1
+    );
+    if (empResult.data && empResult.data.length > 0) {
+      const employeeId = empResult.data[0].name;
+      const drvResult = await frappeGetList(
+        baseUrl,
+        headers,
+        "Driver",
+        [["employee", "=", employeeId]],
+        ["name", "full_name"],
+        1
+      );
+      if (drvResult.data && drvResult.data.length > 0) {
+        driverId = drvResult.data[0].name;
+        driverName = drvResult.data[0].full_name || drvResult.data[0].name;
+      } else {
+        diagnostics.push(
+          `Strategy 3 (Employee ${employeeId} → Driver): ${drvResult.error || "no results"}`
+        );
+      }
+    } else {
+      diagnostics.push(
+        `Strategy 3 (Employee.user_id=${userName}): ${empResult.error || "no results"}`
+      );
+    }
+  }
+
+  // Strategy 4: Match by full_name as a last resort
+  if (!driverId && fullName && fullName !== userName) {
+    const result = await frappeGetList(
+      baseUrl,
+      headers,
+      "Driver",
+      [["full_name", "=", fullName]],
+      ["name", "full_name"],
+      1
+    );
+    if (result.data && result.data.length > 0) {
+      driverId = result.data[0].name;
+      driverName = result.data[0].full_name || result.data[0].name;
+    } else {
+      diagnostics.push(
+        `Strategy 4 (Driver.full_name=${fullName}): ${result.error || "no results"}`
+      );
+    }
+  }
+
+  // Strategy 5: Try getting ALL drivers and match (handles case where field name is different)
+  if (!driverId) {
+    const result = await frappeGetList(
+      baseUrl,
+      headers,
+      "Driver",
+      [],
+      ["name", "full_name", "user", "employee"],
+      20
+    );
+    if (result.data && result.data.length > 0) {
+      // Try to match any driver whose user field matches
+      const match = result.data.find(
+        (d: any) =>
+          d.user === userName ||
+          d.user_id === userName ||
+          (d.full_name && d.full_name.toLowerCase() === fullName.toLowerCase())
+      );
+      if (match) {
+        driverId = match.name;
+        driverName = match.full_name || match.name;
+        diagnostics.push(
+          `Strategy 5 (scan all drivers): matched ${match.name}`
+        );
+      } else {
+        const driverUsers = result.data
+          .map((d: any) => `${d.name}:user=${d.user || "null"}`)
+          .join(", ");
+        diagnostics.push(
+          `Strategy 5 (scan ${result.data.length} drivers): no match. Drivers: ${driverUsers}`
+        );
+      }
+    } else {
+      diagnostics.push(
+        `Strategy 5 (list all drivers): ${result.error || "no results / no access"}`
+      );
+    }
+  }
+
+  const driverLinkError = driverId
+    ? undefined
+    : diagnostics.join(" | ");
 
   const authState: AuthState = {
     siteUrl: baseUrl,
@@ -165,6 +279,7 @@ export async function login(
     isLoggedIn: true,
     driverId,
     driverName,
+    driverLinkError,
   };
 
   await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(authState));
@@ -269,7 +384,6 @@ export async function updateRunSheetStatus(
   const baseUrl = await getBaseUrl();
   const headers = await getHeaders();
 
-  // Use the Frappe REST API to update the Run Sheet status
   const url = `${baseUrl}/api/resource/Run Sheet/${encodeURIComponent(
     runSheetName
   )}`;

@@ -105,4 +105,5 @@ export interface AuthState {
   isLoggedIn: boolean;
   driverId?: string;
   driverName?: string;
+  driverLinkError?: string;
 }
