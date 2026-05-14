@@ -67,28 +67,93 @@ export async function login(
     // Ignore, use userName
   }
 
-  // Resolve the Driver record linked to this user
+  // Resolve the Driver record linked to this user via multiple strategies
   let driverId: string | undefined;
   let driverName: string | undefined;
   try {
-    // The Driver doctype in ERPNext has a user_id field that links to the User
-    const driverRes = await fetch(
-      `${baseUrl}/api/resource/Driver?filters=${encodeURIComponent(
-        JSON.stringify([["user_id", "=", userName]])
-      )}&fields=${encodeURIComponent(
-        JSON.stringify(["name", "driver_name"])
-      )}&limit_page_length=1`,
-      { headers }
-    );
-    if (driverRes.ok) {
-      const driverData = await driverRes.json();
-      if (driverData.data && driverData.data.length > 0) {
-        driverId = driverData.data[0].name;
-        driverName = driverData.data[0].driver_name || driverData.data[0].name;
+    // Strategy 1: Look up Employee linked to this user, then find Driver linked to that Employee
+    // ERPNext chain: User (email) → Employee (user_id) → Driver (employee)
+    try {
+      const empRes = await fetch(
+        `${baseUrl}/api/resource/Employee?filters=${encodeURIComponent(
+          JSON.stringify([["user_id", "=", userName]])
+        )}&fields=${encodeURIComponent(
+          JSON.stringify(["name"])
+        )}&limit_page_length=1`,
+        { headers }
+      );
+      if (empRes.ok) {
+        const empData = await empRes.json();
+        if (empData.data && empData.data.length > 0) {
+          const employeeId = empData.data[0].name;
+          const driverRes = await fetch(
+            `${baseUrl}/api/resource/Driver?filters=${encodeURIComponent(
+              JSON.stringify([["employee", "=", employeeId]])
+            )}&fields=${encodeURIComponent(
+              JSON.stringify(["name", "full_name"])
+            )}&limit_page_length=1`,
+            { headers }
+          );
+          if (driverRes.ok) {
+            const driverData = await driverRes.json();
+            if (driverData.data && driverData.data.length > 0) {
+              driverId = driverData.data[0].name;
+              driverName = driverData.data[0].full_name || driverData.data[0].name;
+            }
+          }
+        }
+      }
+    } catch {
+      // Strategy 1 failed, continue to next
+    }
+
+    // Strategy 2: Try direct user_id field on Driver (some setups add this)
+    if (!driverId) {
+      try {
+        const driverRes = await fetch(
+          `${baseUrl}/api/resource/Driver?filters=${encodeURIComponent(
+            JSON.stringify([["user_id", "=", userName]])
+          )}&fields=${encodeURIComponent(
+            JSON.stringify(["name", "full_name"])
+          )}&limit_page_length=1`,
+          { headers }
+        );
+        if (driverRes.ok) {
+          const driverData = await driverRes.json();
+          if (driverData.data && driverData.data.length > 0) {
+            driverId = driverData.data[0].name;
+            driverName = driverData.data[0].full_name || driverData.data[0].name;
+          }
+        }
+      } catch {
+        // Strategy 2 failed, continue to next
+      }
+    }
+
+    // Strategy 3: Match by full_name as a last resort
+    if (!driverId && fullName && fullName !== userName) {
+      try {
+        const driverRes = await fetch(
+          `${baseUrl}/api/resource/Driver?filters=${encodeURIComponent(
+            JSON.stringify([["full_name", "=", fullName]])
+          )}&fields=${encodeURIComponent(
+            JSON.stringify(["name", "full_name"])
+          )}&limit_page_length=1`,
+          { headers }
+        );
+        if (driverRes.ok) {
+          const driverData = await driverRes.json();
+          if (driverData.data && driverData.data.length > 0) {
+            driverId = driverData.data[0].name;
+            driverName = driverData.data[0].full_name || driverData.data[0].name;
+          }
+        }
+      } catch {
+        // Strategy 3 failed
       }
     }
   } catch {
-    // If Driver lookup fails, we still allow login but won't filter
+    // If all Driver lookups fail, we still allow login but won't filter
   }
 
   const authState: AuthState = {

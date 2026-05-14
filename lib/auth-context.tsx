@@ -9,6 +9,7 @@ interface AuthContextType {
   login: (siteUrl: string, apiKey: string, apiSecret: string) => Promise<void>;
   logout: () => Promise<void>;
   updateCredentials: (siteUrl: string, apiKey: string, apiSecret: string) => Promise<void>;
+  setDriverOverride: (driverId: string, driverName?: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -17,6 +18,7 @@ const AuthContext = createContext<AuthContextType>({
   login: async () => {},
   logout: async () => {},
   updateCredentials: async () => {},
+  setDriverOverride: async () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -63,8 +65,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
+  const setDriverOverride = useCallback(
+    async (driverId: string, driverName?: string) => {
+      if (!auth) return;
+      const updated: AuthState = {
+        ...auth,
+        driverId: driverId || undefined,
+        driverName: driverName || driverId || undefined,
+      };
+      // Persist the override
+      const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
+      await AsyncStorage.setItem("frappe_auth", JSON.stringify(updated));
+      setAuth(updated);
+    },
+    [auth]
+  );
+
   return (
-    <AuthContext.Provider value={{ auth, isLoading, login, logout, updateCredentials }}>
+    <AuthContext.Provider value={{ auth, isLoading, login, logout, updateCredentials, setDriverOverride }}>
       {children}
     </AuthContext.Provider>
   );

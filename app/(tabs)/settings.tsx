@@ -24,7 +24,7 @@ import {
 } from "@/lib/notifications";
 
 export default function SettingsScreen() {
-  const { auth, logout, updateCredentials } = useAuth();
+  const { auth, logout, updateCredentials, setDriverOverride } = useAuth();
   const { isOnline, pendingCount, isSyncing, lastSync, syncNow } = useSync();
   const colors = useColors();
   const router = useRouter();
@@ -34,6 +34,15 @@ export default function SettingsScreen() {
     scannedApiSecret?: string;
   }>();
   const [notifEnabled, setNotifEnabled] = useState(false);
+
+  // Driver override state
+  const [driverExpanded, setDriverExpanded] = useState(false);
+  const [editDriverId, setEditDriverId] = useState(auth?.driverId || "");
+  const [isSavingDriver, setIsSavingDriver] = useState(false);
+  const [driverMessage, setDriverMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
 
   // Configuration editing state
   const [configExpanded, setConfigExpanded] = useState(false);
@@ -54,8 +63,9 @@ export default function SettingsScreen() {
       setEditSiteUrl(auth.siteUrl);
       setEditApiKey(auth.apiKey);
       setEditApiSecret(auth.apiSecret);
+      setEditDriverId(auth.driverId || "");
     }
-  }, [auth?.siteUrl, auth?.apiKey, auth?.apiSecret]);
+  }, [auth?.siteUrl, auth?.apiKey, auth?.apiSecret, auth?.driverId]);
 
   // Handle scanned QR config params
   useEffect(() => {
@@ -653,6 +663,228 @@ export default function SettingsScreen() {
                   Generate API keys in your Frappe site under Settings {">"} API
                   Access. Or scan a QR code provided by your administrator.
                 </Text>
+              </View>
+            </View>
+          )}
+        </View>
+
+        {/* Driver Linking */}
+        <Text className="text-sm font-semibold text-muted mb-2 ml-1">
+          DRIVER LINKING
+        </Text>
+        <View className="bg-surface rounded-2xl border border-border mb-4 overflow-hidden">
+          <TouchableOpacity
+            style={styles.configHeader}
+            onPress={() => {
+              setDriverExpanded(!driverExpanded);
+              setDriverMessage(null);
+            }}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons
+              name="badge"
+              size={20}
+              color={auth?.driverId ? colors.success : colors.warning}
+            />
+            <View style={styles.configHeaderText}>
+              <Text className="text-sm font-medium text-foreground">
+                Driver Record
+              </Text>
+              <Text className="text-xs text-muted" numberOfLines={1}>
+                {auth?.driverId
+                  ? `${auth.driverName || auth.driverId}`
+                  : "Not linked — tap to set manually"}
+              </Text>
+            </View>
+            <MaterialIcons
+              name={driverExpanded ? "expand-less" : "expand-more"}
+              size={24}
+              color={colors.muted}
+            />
+          </TouchableOpacity>
+
+          {driverExpanded && (
+            <View style={[styles.configBody, { borderTopColor: colors.border }]}>
+              <View
+                style={[
+                  styles.hintBox,
+                  {
+                    backgroundColor: colors.background,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <MaterialIcons
+                  name="info-outline"
+                  size={14}
+                  color={colors.muted}
+                />
+                <Text style={[styles.hintText, { color: colors.muted }]}>
+                  The app tries to auto-detect your Driver record via Employee {">"}  Driver link. If that fails, enter your Driver ID manually below (e.g., HR-DRI-00001).
+                </Text>
+              </View>
+
+              <View style={styles.fieldGroup}>
+                <Text style={[styles.fieldLabel, { color: colors.muted }]}>
+                  Driver ID
+                </Text>
+                <View
+                  style={[styles.inputRow, { borderColor: colors.border }]}
+                >
+                  <MaterialIcons
+                    name="badge"
+                    size={18}
+                    color={colors.muted}
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={[styles.input, { color: colors.foreground }]}
+                    value={editDriverId}
+                    onChangeText={(text) => {
+                      setEditDriverId(text);
+                      setDriverMessage(null);
+                    }}
+                    placeholder="e.g., HR-DRI-00001"
+                    placeholderTextColor={colors.muted}
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                    returnKeyType="done"
+                  />
+                  {editDriverId ? (
+                    <TouchableOpacity
+                      onPress={() => {
+                        setEditDriverId("");
+                        setDriverMessage(null);
+                      }}
+                      style={styles.eyeBtn}
+                      activeOpacity={0.6}
+                    >
+                      <MaterialIcons
+                        name="close"
+                        size={18}
+                        color={colors.muted}
+                      />
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              </View>
+
+              {driverMessage && (
+                <View
+                  style={[
+                    styles.messageBox,
+                    {
+                      backgroundColor:
+                        driverMessage.type === "success"
+                          ? colors.success + "15"
+                          : colors.error + "15",
+                      borderColor:
+                        driverMessage.type === "success"
+                          ? colors.success
+                          : colors.error,
+                    },
+                  ]}
+                >
+                  <MaterialIcons
+                    name={
+                      driverMessage.type === "success"
+                        ? "check-circle"
+                        : "error-outline"
+                    }
+                    size={16}
+                    color={
+                      driverMessage.type === "success"
+                        ? colors.success
+                        : colors.error
+                    }
+                  />
+                  <Text
+                    style={[
+                      styles.messageText,
+                      {
+                        color:
+                          driverMessage.type === "success"
+                            ? colors.success
+                            : colors.error,
+                      },
+                    ]}
+                  >
+                    {driverMessage.text}
+                  </Text>
+                </View>
+              )}
+
+              <View style={styles.configActions}>
+                <TouchableOpacity
+                  style={[
+                    styles.configBtn,
+                    styles.configBtnPrimary,
+                    {
+                      backgroundColor: colors.primary,
+                      opacity: isSavingDriver ? 0.6 : 1,
+                    },
+                  ]}
+                  onPress={async () => {
+                    const id = editDriverId.trim();
+                    setIsSavingDriver(true);
+                    setDriverMessage(null);
+                    try {
+                      if (id) {
+                        // Validate the Driver ID exists on the server
+                        const baseUrl = (auth?.siteUrl || "").replace(/\/+$/, "");
+                        const headers = {
+                          Authorization: `token ${auth?.apiKey}:${auth?.apiSecret}`,
+                          "Content-Type": "application/json",
+                          Accept: "application/json",
+                        };
+                        const res = await fetch(
+                          `${baseUrl}/api/resource/Driver/${encodeURIComponent(id)}?fields=${encodeURIComponent(JSON.stringify(["name", "full_name"]))}`,
+                          { headers }
+                        );
+                        if (!res.ok) {
+                          setDriverMessage({
+                            type: "error",
+                            text: `Driver "${id}" not found on the server. Check the ID and try again.`,
+                          });
+                          setIsSavingDriver(false);
+                          return;
+                        }
+                        const data = await res.json();
+                        const name = data.data?.full_name || id;
+                        await setDriverOverride(id, name);
+                        setDriverMessage({
+                          type: "success",
+                          text: `Linked to driver: ${name} (${id})`,
+                        });
+                      } else {
+                        // Clear override
+                        await setDriverOverride("");
+                        setDriverMessage({
+                          type: "success",
+                          text: "Driver link cleared. All run sheets will be shown.",
+                        });
+                      }
+                    } catch (error: any) {
+                      setDriverMessage({
+                        type: "error",
+                        text: error?.message || "Failed to validate Driver ID.",
+                      });
+                    } finally {
+                      setIsSavingDriver(false);
+                    }
+                  }}
+                  disabled={isSavingDriver}
+                  activeOpacity={0.7}
+                >
+                  {isSavingDriver ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <MaterialIcons name="save" size={16} color="#fff" />
+                  )}
+                  <Text style={[styles.configBtnText, { color: "#fff" }]}>
+                    {editDriverId.trim() ? "Validate & Save" : "Clear Link"}
+                  </Text>
+                </TouchableOpacity>
               </View>
             </View>
           )}
