@@ -4,19 +4,19 @@ import {
   Text,
   FlatList,
   RefreshControl,
-  Pressable,
+  TouchableOpacity,
   ActivityIndicator,
   Alert,
-  TouchableOpacity,
+  StyleSheet,
 } from "react-native";
-import { useLocalSearchParams, useRouter, Stack } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { ScreenContainer } from "@/components/screen-container";
 import { ConnectivityBanner } from "@/components/connectivity-banner";
 import { StatusBadge } from "@/components/status-badge";
 import { useColors } from "@/hooks/use-colors";
 import { useSync } from "@/lib/sync-context";
-import type { RunSheetBundle, TransportLeg, PendingStatusChange } from "@/lib/types";
+import type { RunSheetBundle, TransportLeg } from "@/lib/types";
 import {
   getCachedBundle,
   refreshBundle,
@@ -24,7 +24,7 @@ import {
   applyLocalStatusChange,
 } from "@/lib/offline-store";
 import { updateRunSheetStatus } from "@/lib/frappe-api";
-import { generateAndSharePdf, printRunSheetPdf } from "@/lib/pdf-generator";
+import { generateRunSheetPdf } from "@/lib/pdf-generator";
 
 export default function RunSheetDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -45,8 +45,13 @@ export default function RunSheetDetailScreen() {
 
       try {
         if (isOnline) {
-          const data = await refreshBundle(id);
-          setBundle(data);
+          try {
+            const data = await refreshBundle(id);
+            setBundle(data);
+          } catch {
+            const cached = await getCachedBundle(id);
+            setBundle(cached);
+          }
         } else {
           const cached = await getCachedBundle(id);
           setBundle(cached);
@@ -74,199 +79,73 @@ export default function RunSheetDetailScreen() {
         month: "short",
         day: "numeric",
         year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
       });
     } catch {
       return dateStr;
     }
   };
 
-  const hasCapture = (leg: TransportLeg, type: "pick" | "drop") => {
-    if (type === "pick") {
-      return !!leg.pick_signature || !!leg.start_date;
-    }
-    return !!leg.drop_signature || !!leg.end_date;
+  const openRouteMap = () => {
+    if (!bundle) return;
+    const legsJson = JSON.stringify(
+      bundle.legs.map((l) => ({
+        name: l.name,
+        pickLat: l.pick_latitude || 0,
+        pickLng: l.pick_longitude || 0,
+        dropLat: l.drop_latitude || 0,
+        dropLng: l.drop_longitude || 0,
+        facilityFrom: l.facility_from || "Pick-up",
+        facilityTo: l.facility_to || "Drop-off",
+      }))
+    );
+    router.push({
+      pathname: "/route-map",
+      params: { legs: legsJson, title: id || "Route" },
+    });
   };
-
-  const renderLeg = ({ item, index }: { item: TransportLeg; index: number }) => (
-    <Pressable
-      onPress={() =>
-        router.push({
-          pathname: "/leg/[legId]",
-          params: { legId: item.name, runSheetId: id! },
-        })
-      }
-      style={({ pressed }) => [pressed ? { opacity: 0.7 } : {}]}
-    >
-      <View className="bg-surface rounded-2xl p-4 mx-4 mb-3 border border-border">
-        {/* Header */}
-        <View className="flex-row items-center justify-between mb-2">
-          <View className="flex-row items-center gap-2">
-            <View className="w-7 h-7 rounded-full bg-primary items-center justify-center">
-              <Text className="text-white text-xs font-bold">{index + 1}</Text>
-            </View>
-            <Text className="text-sm font-bold text-foreground" numberOfLines={1}>
-              {item.name}
-            </Text>
-          </View>
-          <StatusBadge status={item.status} />
-        </View>
-
-        {/* Route */}
-        <View className="flex-row items-center gap-2 mb-2">
-          <View className="flex-1">
-            <View className="flex-row items-center gap-1">
-              <MaterialIcons name="trip-origin" size={14} color={colors.success} />
-              <Text className="text-xs text-muted flex-1" numberOfLines={1}>
-                {item.facility_from || "Pick-up"}
-              </Text>
-            </View>
-            <View className="ml-1.5 border-l border-border h-3" />
-            <View className="flex-row items-center gap-1">
-              <MaterialIcons name="place" size={14} color={colors.error} />
-              <Text className="text-xs text-muted flex-1" numberOfLines={1}>
-                {item.facility_to || "Drop-off"}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Capture indicators */}
-        <View className="flex-row items-center gap-4 mt-1">
-          <View className="flex-row items-center gap-1">
-            <MaterialIcons
-              name="draw"
-              size={14}
-              color={hasCapture(item, "pick") ? colors.success : colors.border}
-            />
-            <Text
-              className={`text-xs ${
-                hasCapture(item, "pick") ? "text-success" : "text-muted"
-              }`}
-            >
-              Pick
-            </Text>
-          </View>
-          <View className="flex-row items-center gap-1">
-            <MaterialIcons
-              name="draw"
-              size={14}
-              color={hasCapture(item, "drop") ? colors.success : colors.border}
-            />
-            <Text
-              className={`text-xs ${
-                hasCapture(item, "drop") ? "text-success" : "text-muted"
-              }`}
-            >
-              Drop
-            </Text>
-          </View>
-          {item.distance_km ? (
-            <View className="flex-row items-center gap-1">
-              <MaterialIcons name="straighten" size={14} color={colors.muted} />
-              <Text className="text-xs text-muted">
-                {item.distance_km.toFixed(1)} km
-              </Text>
-            </View>
-          ) : null}
-        </View>
-
-        {/* Chevron */}
-        <View className="absolute right-4 top-0 bottom-0 justify-center">
-          <MaterialIcons name="chevron-right" size={20} color={colors.border} />
-        </View>
-      </View>
-    </Pressable>
-  );
-
-  // Build leg points for the map
-  const mapLegPoints = useCallback(() => {
-    if (!bundle) return [];
-    return bundle.legs.map((leg) => ({
-      name: leg.name,
-      pickLat: leg.pick_latitude || 0,
-      pickLng: leg.pick_longitude || 0,
-      dropLat: leg.drop_latitude || 0,
-      dropLng: leg.drop_longitude || 0,
-      facilityFrom: leg.facility_from || "Pick-up",
-      facilityTo: leg.facility_to || "Drop-off",
-    }));
-  }, [bundle]);
 
   const handleExportPdf = async () => {
     if (!bundle) return;
     setIsGeneratingPdf(true);
     try {
-      Alert.alert(
-        "Export PDF",
-        "Choose an option:",
-        [
-          {
-            text: "Share PDF",
-            onPress: async () => {
-              try {
-                await generateAndSharePdf(bundle);
-              } catch (error: any) {
-                Alert.alert("Error", error.message || "Failed to generate PDF.");
-              } finally {
-                setIsGeneratingPdf(false);
-              }
-            },
+      const fileUri = await generateRunSheetPdf(bundle);
+      const fileName = fileUri.split("/").pop() || "RunSheet.pdf";
+      Alert.alert("PDF Ready", `Choose an action for ${fileName}`, [
+        {
+          text: "Share",
+          onPress: async () => {
+            const Sharing = await import("expo-sharing");
+            if (await Sharing.isAvailableAsync()) {
+              await Sharing.shareAsync(fileUri, {
+                mimeType: "application/pdf",
+                dialogTitle: `Share ${fileName}`,
+              });
+            } else {
+              Alert.alert("Sharing not available on this device");
+            }
           },
-          {
-            text: "Print",
-            onPress: async () => {
-              try {
-                await printRunSheetPdf(bundle);
-              } catch (error: any) {
-                Alert.alert("Error", error.message || "Failed to print.");
-              } finally {
-                setIsGeneratingPdf(false);
-              }
-            },
+        },
+        {
+          text: "Print",
+          onPress: async () => {
+            const Print = await import("expo-print");
+            await Print.printAsync({ uri: fileUri });
           },
-          {
-            text: "Cancel",
-            style: "cancel",
-            onPress: () => setIsGeneratingPdf(false),
-          },
-        ]
-      );
-    } catch (error: any) {
-      Alert.alert("Error", error.message || "Failed to generate PDF.");
+        },
+        { text: "Done", style: "cancel" },
+      ]);
+    } catch (e: any) {
+      Alert.alert("Error", e.message || "Failed to generate PDF");
+    } finally {
       setIsGeneratingPdf(false);
     }
   };
 
-  const openRouteMap = () => {
-    const points = mapLegPoints();
-    const hasAnyCoords = points.some(
-      (p) => (p.pickLat && p.pickLng) || (p.dropLat && p.dropLng)
-    );
-    if (!hasAnyCoords) {
-      Alert.alert(
-        "No GPS Data",
-        "No GPS coordinates have been recorded for any legs yet. Record timestamps on legs to capture GPS locations."
-      );
-      return;
-    }
-    router.push({
-      pathname: "/route-map",
-      params: {
-        legs: JSON.stringify(points),
-        runSheetName: id || "Route Map",
-      },
-    });
-  };
-
-  const handleStatusUpdate = async (newStatus: string) => {
-    if (!id || !bundle) return;
-    const currentStatus = bundle.doc.status;
-
+  const handleStatusUpdate = (newStatus: string) => {
+    if (!bundle) return;
     Alert.alert(
       "Update Status",
-      `Change status from "${currentStatus}" to "${newStatus}"?`,
+      `Change status to "${newStatus}"?`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -275,52 +154,24 @@ export default function RunSheetDetailScreen() {
             setIsUpdatingStatus(true);
             try {
               if (isOnline) {
-                // Try to update directly on the server
-                await updateRunSheetStatus(id, newStatus);
+                await updateRunSheetStatus(id!, newStatus);
+                await loadData(true);
+                Alert.alert("Success", `Status updated to ${newStatus}`);
               } else {
-                // Queue for offline sync
-                const change: PendingStatusChange = {
-                  runSheetName: id,
+                const change = {
+                  runSheetName: id!,
                   status: newStatus,
                   timestamp: new Date().toISOString(),
                 };
                 await addPendingStatusChange(change);
+                await applyLocalStatusChange(id!, newStatus);
                 await refreshPendingCount();
-              }
-
-              // Apply locally regardless
-              await applyLocalStatusChange(id, newStatus);
-
-              // Reload the bundle to reflect the change
-              const updatedBundle = await getCachedBundle(id);
-              if (updatedBundle) setBundle(updatedBundle);
-
-              Alert.alert(
-                "Status Updated",
-                isOnline
-                  ? `Run sheet marked as "${newStatus}".`
-                  : `Status queued as "${newStatus}" and will sync when online.`
-              );
-            } catch (error: any) {
-              // If online update fails, queue offline
-              try {
-                const change: PendingStatusChange = {
-                  runSheetName: id,
-                  status: newStatus,
-                  timestamp: new Date().toISOString(),
-                };
-                await addPendingStatusChange(change);
-                await applyLocalStatusChange(id, newStatus);
-                await refreshPendingCount();
-                const updatedBundle = await getCachedBundle(id);
+                const updatedBundle = await getCachedBundle(id!);
                 if (updatedBundle) setBundle(updatedBundle);
-                Alert.alert(
-                  "Queued",
-                  `Status change queued and will sync when possible.`
-                );
-              } catch {
-                Alert.alert("Error", error.message || "Failed to update status.");
+                Alert.alert("Queued", "Status change will sync when online.");
               }
+            } catch (error: any) {
+              Alert.alert("Error", error.message || "Failed to update status.");
             } finally {
               setIsUpdatingStatus(false);
             }
@@ -331,7 +182,6 @@ export default function RunSheetDetailScreen() {
   };
 
   const renderStatusActions = (currentStatus: string) => {
-    // Determine available status transitions
     const transitions: { label: string; status: string; icon: string; color: string }[] = [];
 
     if (currentStatus === "Dispatched" || currentStatus === "Draft") {
@@ -344,13 +194,13 @@ export default function RunSheetDetailScreen() {
     }
     if (currentStatus === "In-Progress") {
       transitions.push({
-        label: "Complete Trip",
+        label: "Complete",
         status: "Completed",
         icon: "check-circle",
         color: colors.success,
       });
       transitions.push({
-        label: "Hold Trip",
+        label: "Hold",
         status: "Hold",
         icon: "pause-circle-filled",
         color: colors.warning,
@@ -358,7 +208,7 @@ export default function RunSheetDetailScreen() {
     }
     if (currentStatus === "Hold") {
       transitions.push({
-        label: "Resume Trip",
+        label: "Resume",
         status: "In-Progress",
         icon: "play-arrow",
         color: colors.primary,
@@ -368,11 +218,17 @@ export default function RunSheetDetailScreen() {
     if (transitions.length === 0) return null;
 
     return (
-      <View className="flex-row gap-2 mt-3">
+      <View style={styles.statusActionsRow}>
         {transitions.map((t) => (
           <TouchableOpacity
             key={t.status}
-            style={[{ backgroundColor: t.color, flex: 1, borderRadius: 12, paddingVertical: 10, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, opacity: isUpdatingStatus ? 0.6 : 1 }]}
+            style={[
+              styles.statusBtn,
+              {
+                backgroundColor: t.color,
+                opacity: isUpdatingStatus ? 0.6 : 1,
+              },
+            ]}
             onPress={() => handleStatusUpdate(t.status)}
             activeOpacity={0.8}
             disabled={isUpdatingStatus}
@@ -381,8 +237,8 @@ export default function RunSheetDetailScreen() {
               <ActivityIndicator size="small" color="#fff" />
             ) : (
               <>
-                <MaterialIcons name={t.icon as any} size={16} color="#fff" />
-                <Text style={{ color: "#fff", fontSize: 13, fontWeight: "600" }}>{t.label}</Text>
+                <MaterialIcons name={t.icon as any} size={18} color="#fff" />
+                <Text style={styles.statusBtnText}>{t.label}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -391,22 +247,143 @@ export default function RunSheetDetailScreen() {
     );
   };
 
+  const renderLeg = ({ item, index }: { item: TransportLeg; index: number }) => {
+    const hasPickData = !!item.pick_signature || !!item.start_date;
+    const hasDropData = !!item.drop_signature || !!item.end_date;
+    const isComplete = hasPickData && hasDropData;
+    const isPartial = hasPickData || hasDropData;
+
+    return (
+      <TouchableOpacity
+        onPress={() =>
+          router.push({
+            pathname: "/leg/[legId]",
+            params: {
+              legId: item.name,
+              runSheetId: id || "",
+            },
+          })
+        }
+        activeOpacity={0.7}
+        style={[
+          styles.legCard,
+          {
+            backgroundColor: colors.surface,
+            borderColor: isComplete
+              ? colors.success
+              : isPartial
+              ? colors.warning
+              : colors.border,
+            borderWidth: isComplete || isPartial ? 1.5 : 1,
+          },
+        ]}
+      >
+        {/* Leg number badge + status */}
+        <View style={styles.legHeader}>
+          <View
+            style={[
+              styles.legBadge,
+              {
+                backgroundColor: isComplete
+                  ? colors.success
+                  : isPartial
+                  ? colors.warning
+                  : colors.primary,
+              },
+            ]}
+          >
+            <Text style={styles.legBadgeText}>{index + 1}</Text>
+          </View>
+          <View style={styles.legHeaderText}>
+            <Text
+              style={[styles.legTitle, { color: colors.foreground }]}
+              numberOfLines={1}
+            >
+              {item.facility_from || "Origin"} → {item.facility_to || "Destination"}
+            </Text>
+            <Text style={[styles.legSubtitle, { color: colors.muted }]}>
+              {item.name}
+            </Text>
+          </View>
+          <View style={styles.legStatusIcons}>
+            {/* Pick status */}
+            <View style={styles.legStatusIcon}>
+              <MaterialIcons
+                name="trip-origin"
+                size={16}
+                color={hasPickData ? colors.success : colors.border}
+              />
+            </View>
+            {/* Drop status */}
+            <View style={styles.legStatusIcon}>
+              <MaterialIcons
+                name="place"
+                size={16}
+                color={hasDropData ? colors.success : colors.border}
+              />
+            </View>
+          </View>
+          <MaterialIcons name="chevron-right" size={22} color={colors.border} />
+        </View>
+
+        {/* Info row */}
+        <View style={styles.legInfoRow}>
+          {item.start_date ? (
+            <View style={[styles.legInfoChip, { backgroundColor: colors.background }]}>
+              <MaterialIcons name="schedule" size={12} color={colors.success} />
+              <Text style={[styles.legInfoText, { color: colors.muted }]}>
+                Pick: {new Date(item.start_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </Text>
+            </View>
+          ) : null}
+          {item.end_date ? (
+            <View style={[styles.legInfoChip, { backgroundColor: colors.background }]}>
+              <MaterialIcons name="schedule" size={12} color={colors.error} />
+              <Text style={[styles.legInfoText, { color: colors.muted }]}>
+                Drop: {new Date(item.end_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </Text>
+            </View>
+          ) : null}
+          {item.pick_signature ? (
+            <View style={[styles.legInfoChip, { backgroundColor: colors.background }]}>
+              <MaterialIcons name="draw" size={12} color={colors.success} />
+              <Text style={[styles.legInfoText, { color: colors.muted }]}>Signed</Text>
+            </View>
+          ) : null}
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
   const renderHeader = () => {
     if (!bundle) return null;
     const doc = bundle.doc;
     return (
-      <View className="mx-4 mb-4">
-        <View className="bg-surface rounded-2xl p-4 border border-border">
-          <View className="flex-row items-center justify-between mb-3">
-            <Text className="text-lg font-bold text-foreground">{doc.name}</Text>
+      <View style={styles.headerContainer}>
+        {/* Run sheet info card */}
+        <View
+          style={[
+            styles.infoCard,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+          ]}
+        >
+          <View style={styles.infoCardHeader}>
+            <Text style={[styles.infoCardTitle, { color: colors.foreground }]}>
+              {doc.name}
+            </Text>
             <StatusBadge status={doc.status} />
           </View>
 
           {doc.route_name ? (
-            <Text className="text-sm text-foreground mb-2">{doc.route_name}</Text>
+            <Text
+              style={[styles.routeName, { color: colors.foreground }]}
+              numberOfLines={1}
+            >
+              {doc.route_name}
+            </Text>
           ) : null}
 
-          <View className="gap-2">
+          <View style={styles.infoGrid}>
             <InfoRow icon="event" label="Date" value={formatDate(doc.run_date)} colors={colors} />
             <InfoRow icon="label" label="Type" value={doc.run_type} colors={colors} />
             <InfoRow icon="local-shipping" label="Vehicle" value={doc.vehicle || "—"} colors={colors} />
@@ -416,20 +393,25 @@ export default function RunSheetDetailScreen() {
             ) : null}
           </View>
 
-          {/* Action Buttons Row */}
-          <View className="flex-row gap-2 mt-3">
+          {/* Action Buttons */}
+          <View style={styles.actionRow}>
             <TouchableOpacity
-              className="flex-1 bg-primary rounded-xl py-2.5 flex-row items-center justify-center gap-2"
+              style={[styles.actionBtn, { backgroundColor: colors.primary }]}
               onPress={openRouteMap}
               activeOpacity={0.8}
             >
-              <MaterialIcons name="map" size={18} color="#fff" />
-              <Text className="text-white text-sm font-semibold">Route Map</Text>
+              <MaterialIcons name="map" size={20} color="#fff" />
+              <Text style={styles.actionBtnText}>Route Map</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              className="flex-1 rounded-xl py-2.5 flex-row items-center justify-center gap-2"
-              style={{ backgroundColor: '#E67E22', opacity: isGeneratingPdf ? 0.6 : 1 }}
+              style={[
+                styles.actionBtn,
+                {
+                  backgroundColor: "#E67E22",
+                  opacity: isGeneratingPdf ? 0.6 : 1,
+                },
+              ]}
               onPress={handleExportPdf}
               activeOpacity={0.8}
               disabled={isGeneratingPdf}
@@ -437,10 +419,10 @@ export default function RunSheetDetailScreen() {
               {isGeneratingPdf ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <MaterialIcons name="picture-as-pdf" size={18} color="#fff" />
+                <MaterialIcons name="picture-as-pdf" size={20} color="#fff" />
               )}
-              <Text className="text-white text-sm font-semibold">
-                {isGeneratingPdf ? 'Generating...' : 'Export PDF'}
+              <Text style={styles.actionBtnText}>
+                {isGeneratingPdf ? "..." : "PDF"}
               </Text>
             </TouchableOpacity>
           </View>
@@ -449,7 +431,7 @@ export default function RunSheetDetailScreen() {
           {renderStatusActions(doc.status)}
         </View>
 
-        <Text className="text-base font-semibold text-foreground mt-5 mb-2 ml-1">
+        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
           Transport Legs ({bundle.legs.length})
         </Text>
       </View>
@@ -464,21 +446,21 @@ export default function RunSheetDetailScreen() {
           headerBackTitle: "Back",
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.primary,
-          headerTitleStyle: { color: colors.foreground },
+          headerTitleStyle: { color: colors.foreground, fontSize: 17, fontWeight: "600" },
         }}
       />
       <ScreenContainer edges={["left", "right"]}>
         <ConnectivityBanner />
 
         {isLoading ? (
-          <View className="flex-1 items-center justify-center">
+          <View style={styles.centerContainer}>
             <ActivityIndicator size="large" color={colors.primary} />
-            <Text className="text-sm text-muted mt-3">Loading...</Text>
+            <Text style={[styles.loadingText, { color: colors.muted }]}>Loading...</Text>
           </View>
         ) : !bundle ? (
-          <View className="flex-1 items-center justify-center">
+          <View style={styles.centerContainer}>
             <MaterialIcons name="error-outline" size={48} color={colors.border} />
-            <Text className="text-base text-muted mt-4">
+            <Text style={[styles.errorText, { color: colors.muted }]}>
               Could not load run sheet
             </Text>
           </View>
@@ -488,7 +470,7 @@ export default function RunSheetDetailScreen() {
             keyExtractor={(item) => item.name}
             renderItem={renderLeg}
             ListHeaderComponent={renderHeader}
-            contentContainerStyle={{ paddingTop: 16, paddingBottom: 20 }}
+            contentContainerStyle={{ paddingTop: 16, paddingBottom: 32 }}
             refreshControl={
               <RefreshControl
                 refreshing={isRefreshing}
@@ -515,10 +497,180 @@ function InfoRow({
   colors: any;
 }) {
   return (
-    <View className="flex-row items-center gap-2">
-      <MaterialIcons name={icon as any} size={16} color={colors.muted} />
-      <Text className="text-xs text-muted w-16">{label}</Text>
-      <Text className="text-sm text-foreground flex-1">{value}</Text>
+    <View style={styles.infoRow2}>
+      <MaterialIcons name={icon as any} size={18} color={colors.muted} />
+      <Text style={[styles.infoLabel, { color: colors.muted }]}>{label}</Text>
+      <Text style={[styles.infoValue, { color: colors.foreground }]} numberOfLines={1}>
+        {value}
+      </Text>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  headerContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  infoCard: {
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+  },
+  infoCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  infoCardTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    flex: 1,
+    marginRight: 12,
+  },
+  routeName: {
+    fontSize: 15,
+    fontWeight: "500",
+    marginBottom: 14,
+  },
+  infoGrid: {
+    gap: 8,
+  },
+  infoRow2: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  infoLabel: {
+    fontSize: 13,
+    width: 64,
+    fontWeight: "500",
+  },
+  infoValue: {
+    fontSize: 14,
+    fontWeight: "600",
+    flex: 1,
+  },
+  actionRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 16,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 14,
+  },
+  actionBtnText: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  statusActionsRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 12,
+  },
+  statusBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 14,
+    borderRadius: 14,
+  },
+  statusBtnText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    marginTop: 24,
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  legCard: {
+    borderRadius: 16,
+    padding: 16,
+    marginHorizontal: 16,
+    marginBottom: 10,
+  },
+  legHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  legBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  legBadgeText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  legHeaderText: {
+    flex: 1,
+  },
+  legTitle: {
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  legSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  legStatusIcons: {
+    flexDirection: "row",
+    gap: 4,
+  },
+  legStatusIcon: {
+    width: 24,
+    height: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  legInfoRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 10,
+    paddingLeft: 44,
+  },
+  legInfoChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  legInfoText: {
+    fontSize: 11,
+    fontWeight: "500",
+  },
+  centerContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loadingText: {
+    fontSize: 14,
+    marginTop: 12,
+  },
+  errorText: {
+    fontSize: 15,
+    marginTop: 16,
+  },
+});

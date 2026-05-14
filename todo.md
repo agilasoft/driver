@@ -33,3 +33,5 @@
 - [x] Downloadable PDF summary of completed run sheet with signatures, photos, timestamps, GPS data
 - [x] Fix: Driver record not found even when linked to user in Frappe
 - [x] Fix: Driver lookup must use user_id field on Driver doctype directly, remove manual linking
+- [x] Make app more mobile-friendly (larger touch targets, better spacing, improved readability)
+- [x] Add Map tab showing current active run sheet route

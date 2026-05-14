@@ -43,12 +43,8 @@ export default function SettingsScreen() {
   const [showApiSecret, setShowApiSecret] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
-  const [saveMessage, setSaveMessage] = useState<{
-    type: "success" | "error";
-    text: string;
-  } | null>(null);
+  const [saveMessage, setSaveMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // Sync form fields with auth state on first load
   useEffect(() => {
     if (auth) {
       setEditSiteUrl(auth.siteUrl);
@@ -57,63 +53,42 @@ export default function SettingsScreen() {
     }
   }, [auth?.siteUrl, auth?.apiKey, auth?.apiSecret]);
 
-  // Handle scanned QR config params
   useEffect(() => {
     if (params.scannedSiteUrl && params.scannedApiKey && params.scannedApiSecret) {
       setEditSiteUrl(params.scannedSiteUrl);
       setEditApiKey(params.scannedApiKey);
       setEditApiSecret(params.scannedApiSecret);
       setConfigExpanded(true);
-      setSaveMessage({
-        type: "success",
-        text: "QR config loaded. Tap Save to apply.",
-      });
+      setSaveMessage({ type: "success", text: "QR config loaded. Tap Save to apply." });
     }
   }, [params.scannedSiteUrl, params.scannedApiKey, params.scannedApiSecret]);
 
-  // Check if fields have changed from stored auth
   const hasChanges = useCallback(() => {
     if (!auth) return false;
-    const normalizeUrl = (url: string) => url.trim().replace(/\/+$/, "");
-    return (
-      normalizeUrl(editSiteUrl) !== normalizeUrl(auth.siteUrl) ||
-      editApiKey.trim() !== auth.apiKey ||
-      editApiSecret.trim() !== auth.apiSecret
-    );
+    const norm = (url: string) => url.trim().replace(/\/+$/, "");
+    return norm(editSiteUrl) !== norm(auth.siteUrl) || editApiKey.trim() !== auth.apiKey || editApiSecret.trim() !== auth.apiSecret;
   }, [auth, editSiteUrl, editApiKey, editApiSecret]);
 
-  // Check notification permission status
   const checkNotifPermission = useCallback(async () => {
     if (Platform.OS === "web") return;
     const { status } = await Notifications.getPermissionsAsync();
     setNotifEnabled(status === "granted");
   }, []);
 
-  useEffect(() => {
-    checkNotifPermission();
-  }, [checkNotifPermission]);
+  useEffect(() => { checkNotifPermission(); }, [checkNotifPermission]);
 
   const handleToggleNotifications = async () => {
     if (notifEnabled) {
       stopAssignmentPolling();
-      Alert.alert(
-        "Notifications Paused",
-        "Assignment polling has been stopped. To fully disable notifications, go to your device Settings."
-      );
+      Alert.alert("Notifications Paused", "Assignment polling has been stopped.");
     } else {
       const granted = await requestNotificationPermissions();
       if (granted) {
         setNotifEnabled(true);
         startAssignmentPolling();
-        Alert.alert(
-          "Notifications Enabled",
-          "You will be notified when new run sheets are assigned to you."
-        );
+        Alert.alert("Notifications Enabled", "You will be notified when new run sheets are assigned.");
       } else {
-        Alert.alert(
-          "Permission Required",
-          "Please enable notifications in your device settings."
-        );
+        Alert.alert("Permission Required", "Please enable notifications in your device settings.");
       }
     }
   };
@@ -122,361 +97,188 @@ export default function SettingsScreen() {
     const url = editSiteUrl.trim();
     const key = editApiKey.trim();
     const secret = editApiSecret.trim();
-
-    if (!url) {
-      setSaveMessage({ type: "error", text: "Server URL is required." });
-      return;
-    }
-    if (!key) {
-      setSaveMessage({ type: "error", text: "API Key is required." });
-      return;
-    }
-    if (!secret) {
-      setSaveMessage({ type: "error", text: "API Secret is required." });
-      return;
-    }
-
-    // Normalize URL
+    if (!url) { setSaveMessage({ type: "error", text: "Server URL is required." }); return; }
+    if (!key) { setSaveMessage({ type: "error", text: "API Key is required." }); return; }
+    if (!secret) { setSaveMessage({ type: "error", text: "API Secret is required." }); return; }
     let normalizedUrl = url;
-    if (!normalizedUrl.startsWith("http://") && !normalizedUrl.startsWith("https://")) {
-      normalizedUrl = "https://" + normalizedUrl;
-    }
+    if (!normalizedUrl.startsWith("http://") && !normalizedUrl.startsWith("https://")) normalizedUrl = "https://" + normalizedUrl;
     normalizedUrl = normalizedUrl.replace(/\/+$/, "");
-
     setIsSaving(true);
     setSaveMessage(null);
     try {
       await updateCredentials(normalizedUrl, key, secret);
-      setSaveMessage({
-        type: "success",
-        text: "Configuration saved and verified successfully.",
-      });
+      setSaveMessage({ type: "success", text: "Configuration saved and verified successfully." });
     } catch (error: any) {
-      setSaveMessage({
-        type: "error",
-        text:
-          error?.message ||
-          "Could not connect with the provided credentials. Please check your settings.",
-      });
+      setSaveMessage({ type: "error", text: error?.message || "Could not connect. Please check your settings." });
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleResetConfig = () => {
-    if (auth) {
-      setEditSiteUrl(auth.siteUrl);
-      setEditApiKey(auth.apiKey);
-      setEditApiSecret(auth.apiSecret);
-      setSaveMessage(null);
-    }
+    if (auth) { setEditSiteUrl(auth.siteUrl); setEditApiKey(auth.apiKey); setEditApiSecret(auth.apiSecret); setSaveMessage(null); }
   };
 
   const handleTestConnection = async () => {
     const url = editSiteUrl.trim();
     const key = editApiKey.trim();
     const secret = editApiSecret.trim();
-
-    if (!url || !key || !secret) {
-      setSaveMessage({
-        type: "error",
-        text: "Please fill in all connection fields before testing.",
-      });
-      return;
-    }
-
+    if (!url || !key || !secret) { setSaveMessage({ type: "error", text: "Fill in all fields before testing." }); return; }
     let normalizedUrl = url;
-    if (!normalizedUrl.startsWith("http://") && !normalizedUrl.startsWith("https://")) {
-      normalizedUrl = "https://" + normalizedUrl;
-    }
+    if (!normalizedUrl.startsWith("http://") && !normalizedUrl.startsWith("https://")) normalizedUrl = "https://" + normalizedUrl;
     normalizedUrl = normalizedUrl.replace(/\/+$/, "");
-
     setIsTesting(true);
     setSaveMessage(null);
     try {
-      const res = await fetch(
-        `${normalizedUrl}/api/method/frappe.auth.get_logged_user`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `token ${key}:${secret}`,
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-        }
-      );
+      const res = await fetch(`${normalizedUrl}/api/method/frappe.auth.get_logged_user`, {
+        method: "GET",
+        headers: { Authorization: `token ${key}:${secret}`, "Content-Type": "application/json", Accept: "application/json" },
+      });
       if (res.ok) {
         const data = await res.json();
-        setSaveMessage({
-          type: "success",
-          text: `Connection successful! Logged in as: ${data.message || "Unknown"}`,
-        });
+        setSaveMessage({ type: "success", text: `Connected as: ${data.message || "Unknown"}` });
       } else {
-        setSaveMessage({
-          type: "error",
-          text: `Server returned status ${res.status}. Check your credentials.`,
-        });
+        setSaveMessage({ type: "error", text: `Server returned ${res.status}. Check credentials.` });
       }
     } catch (error: any) {
-      setSaveMessage({
-        type: "error",
-        text:
-          error?.message ||
-          "Could not reach the server. Check the URL and your network.",
-      });
+      setSaveMessage({ type: "error", text: error?.message || "Could not reach the server." });
     } finally {
       setIsTesting(false);
     }
   };
 
-  const handleScanQR = () => {
-    router.push({
-      pathname: "/config-scanner",
-      params: { source: "settings" },
-    });
-  };
+  const handleScanQR = () => { router.push({ pathname: "/config-scanner", params: { source: "settings" } }); };
 
   const handleLogout = () => {
     Alert.alert("Sign Out", "Are you sure you want to sign out?", [
       { text: "Cancel", style: "cancel" },
-      {
-        text: "Sign Out",
-        style: "destructive",
-        onPress: async () => {
-          await logout();
-        },
-      },
+      { text: "Sign Out", style: "destructive", onPress: async () => { await logout(); } },
     ]);
   };
 
   const handleSyncNow = async () => {
-    if (!isOnline) {
-      Alert.alert("Offline", "Cannot sync while offline.");
-      return;
-    }
-    if (pendingCount === 0) {
-      Alert.alert("All Synced", "No pending changes to sync.");
-      return;
-    }
+    if (!isOnline) { Alert.alert("Offline", "Cannot sync while offline."); return; }
+    if (pendingCount === 0) { Alert.alert("All Synced", "No pending changes to sync."); return; }
     await syncNow();
   };
 
   const formatLastSync = () => {
     if (!lastSync) return "Never";
     try {
-      const d = new Date(lastSync);
-      return d.toLocaleString("en-US", {
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    } catch {
-      return lastSync;
-    }
+      return new Date(lastSync).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    } catch { return lastSync; }
   };
 
-  const configDirty = hasChanges();
-
   return (
-    <ScreenContainer className="px-4 pt-2">
-      <ScrollView
-        contentContainerStyle={{ paddingBottom: 40 }}
-        keyboardShouldPersistTaps="handled"
-      >
-        <Text className="text-2xl font-bold text-foreground mb-6">
-          Settings
-        </Text>
+    <ScreenContainer>
+      <ScrollView contentContainerStyle={{ paddingBottom: 50, paddingHorizontal: 16, paddingTop: 8 }} keyboardShouldPersistTaps="handled">
+        <Text style={[s.pageTitle, { color: colors.foreground }]}>Settings</Text>
 
-        {/* User Info */}
-        <View className="bg-surface rounded-2xl p-4 border border-border mb-4">
-          <View className="flex-row items-center gap-3 mb-3">
-            <View className="w-12 h-12 rounded-full bg-primary items-center justify-center">
-              <Text className="text-white text-lg font-bold">
-                {(auth?.fullName || auth?.userName || "?")
-                  .charAt(0)
-                  .toUpperCase()}
-              </Text>
+        {/* User Info Card */}
+        <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={s.userRow}>
+            <View style={[s.avatar, { backgroundColor: colors.primary }]}>
+              <Text style={s.avatarText}>{(auth?.fullName || auth?.userName || "?").charAt(0).toUpperCase()}</Text>
             </View>
-            <View className="flex-1">
-              <Text className="text-base font-semibold text-foreground">
-                {auth?.fullName || "Unknown User"}
-              </Text>
-              <Text className="text-xs text-muted">{auth?.userName}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[s.userName, { color: colors.foreground }]}>{auth?.fullName || "Unknown User"}</Text>
+              <Text style={[s.userEmail, { color: colors.muted }]}>{auth?.userName}</Text>
             </View>
           </View>
 
-          <View className="border-t border-border pt-3 mt-1 gap-2">
-            <View className="flex-row items-center gap-2">
-              <MaterialIcons name="language" size={16} color={colors.muted} />
-              <Text
-                className="text-xs text-muted flex-1"
-                numberOfLines={1}
-              >
-                {auth?.siteUrl || "Not connected"}
-              </Text>
+          <View style={[s.divider, { backgroundColor: colors.border }]} />
+
+          <View style={s.infoRow}>
+            <MaterialIcons name="language" size={18} color={colors.muted} />
+            <Text style={[s.infoText, { color: colors.muted }]} numberOfLines={1}>{auth?.siteUrl || "Not connected"}</Text>
+          </View>
+
+          {auth?.driverId ? (
+            <View style={s.infoRow}>
+              <MaterialIcons name="badge" size={18} color={colors.primary} />
+              <Text style={[s.infoText, { color: colors.primary }]} numberOfLines={1}>Driver: {auth.driverName || auth.driverId}</Text>
             </View>
-            {auth?.driverId ? (
-              <View className="flex-row items-center gap-2">
-                <MaterialIcons
-                  name="badge"
-                  size={16}
-                  color={colors.primary}
-                />
-                <Text
-                  className="text-xs text-primary flex-1"
-                  numberOfLines={1}
-                >
-                  Driver: {auth.driverName || auth.driverId}
+          ) : (
+            <View style={{ gap: 8 }}>
+              <View style={s.infoRow}>
+                <MaterialIcons name="warning" size={18} color={colors.warning} />
+                <Text style={[s.infoTextWarn, { color: colors.warning }]} numberOfLines={3}>
+                  No Driver record linked. Set the "User" field on your Driver record to: {auth?.userName}
                 </Text>
               </View>
-            ) : (
-              <View className="gap-2">
-                <View className="flex-row items-center gap-2">
-                  <MaterialIcons
-                    name="warning"
-                    size={16}
-                    color={colors.warning}
-                  />
-                  <Text
-                    className="text-xs text-warning flex-1"
-                    numberOfLines={2}
-                  >
-                    No Driver record linked. Ensure the "User" field on your
-                    Driver record in Frappe is set to: {auth?.userName}
-                  </Text>
-                </View>
-                {auth?.driverLinkError ? (
-                  <TouchableOpacity
-                    onPress={() =>
-                      Alert.alert(
-                        "Driver Lookup Details",
-                        auth.driverLinkError || "No details available",
-                        [{ text: "OK" }]
-                      )
-                    }
-                    activeOpacity={0.7}
-                  >
-                    <Text
-                      className="text-xs ml-6"
-                      style={{ color: colors.muted, textDecorationLine: "underline" }}
-                    >
-                      Tap to view diagnostic details
-                    </Text>
-                  </TouchableOpacity>
-                ) : null}
+              {auth?.driverLinkError ? (
                 <TouchableOpacity
-                  className="flex-row items-center gap-1 ml-6 mt-1"
-                  onPress={async () => {
-                    if (!auth) return;
-                    try {
-                      await updateCredentials(auth.siteUrl, auth.apiKey, auth.apiSecret);
-                      Alert.alert("Retry Complete", auth?.driverId ? "Driver linked successfully!" : "Still could not find a linked Driver record. Tap diagnostic details for more info.");
-                    } catch (e: any) {
-                      Alert.alert("Error", e?.message || "Failed to re-check driver link.");
-                    }
-                  }}
+                  onPress={() => Alert.alert("Driver Lookup Details", auth.driverLinkError || "No details", [{ text: "OK" }])}
+                  style={s.diagLink}
                   activeOpacity={0.7}
                 >
-                  <MaterialIcons name="refresh" size={14} color={colors.primary} />
-                  <Text className="text-xs text-primary font-medium">
-                    Retry Driver Lookup
-                  </Text>
+                  <MaterialIcons name="info-outline" size={14} color={colors.muted} />
+                  <Text style={[s.diagText, { color: colors.muted }]}>View diagnostic details</Text>
                 </TouchableOpacity>
-              </View>
-            )}
-          </View>
+              ) : null}
+              <TouchableOpacity
+                style={s.retryBtn}
+                onPress={async () => {
+                  if (!auth) return;
+                  try {
+                    await updateCredentials(auth.siteUrl, auth.apiKey, auth.apiSecret);
+                    Alert.alert("Retry Complete", auth?.driverId ? "Driver linked!" : "Still no Driver found. Check diagnostics.");
+                  } catch (e: any) {
+                    Alert.alert("Error", e?.message || "Failed to retry.");
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons name="refresh" size={16} color={colors.primary} />
+                <Text style={[s.retryText, { color: colors.primary }]}>Retry Driver Lookup</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         {/* Configuration */}
-        <Text className="text-sm font-semibold text-muted mb-2 ml-1">
-          CONFIGURATION
-        </Text>
-        <View className="bg-surface rounded-2xl border border-border mb-4 overflow-hidden">
-          {/* Collapsed summary */}
+        <Text style={[s.sectionLabel, { color: colors.muted }]}>CONFIGURATION</Text>
+        <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border, padding: 0, overflow: "hidden" }]}>
           <TouchableOpacity
-            style={styles.configHeader}
-            onPress={() => {
-              setConfigExpanded(!configExpanded);
-              setSaveMessage(null);
-            }}
+            style={s.configHeader}
+            onPress={() => { setConfigExpanded(!configExpanded); setSaveMessage(null); }}
             activeOpacity={0.7}
           >
-            <MaterialIcons
-              name="settings-ethernet"
-              size={20}
-              color={colors.primary}
-            />
-            <View style={styles.configHeaderText}>
-              <Text className="text-sm font-medium text-foreground">
-                Server Connection
-              </Text>
-              <Text className="text-xs text-muted" numberOfLines={1}>
-                {auth?.siteUrl || "Not configured"}
-              </Text>
+            <MaterialIcons name="settings-ethernet" size={22} color={colors.primary} />
+            <View style={{ flex: 1 }}>
+              <Text style={[s.configTitle, { color: colors.foreground }]}>Server Connection</Text>
+              <Text style={[s.configSubtitle, { color: colors.muted }]} numberOfLines={1}>{auth?.siteUrl || "Not configured"}</Text>
             </View>
-            <MaterialIcons
-              name={configExpanded ? "expand-less" : "expand-more"}
-              size={24}
-              color={colors.muted}
-            />
+            <MaterialIcons name={configExpanded ? "expand-less" : "expand-more"} size={26} color={colors.muted} />
           </TouchableOpacity>
 
           {configExpanded && (
-            <View style={[styles.configBody, { borderTopColor: colors.border }]}>
-              {/* Scan QR Button */}
+            <View style={[s.configBody, { borderTopColor: colors.border }]}>
+              {/* Scan QR */}
               <TouchableOpacity
-                style={[
-                  styles.scanQrBtn,
-                  { borderColor: colors.primary, backgroundColor: colors.background },
-                ]}
+                style={[s.scanQrBtn, { borderColor: colors.primary, backgroundColor: colors.background }]}
                 onPress={handleScanQR}
                 activeOpacity={0.7}
               >
-                <MaterialIcons
-                  name="qr-code-scanner"
-                  size={20}
-                  color={colors.primary}
-                />
-                <Text style={[styles.scanQrText, { color: colors.primary }]}>
-                  Scan QR Code to Configure
-                </Text>
+                <MaterialIcons name="qr-code-scanner" size={22} color={colors.primary} />
+                <Text style={[s.scanQrText, { color: colors.primary }]}>Scan QR Code to Configure</Text>
               </TouchableOpacity>
 
-              {/* Divider with "or" */}
-              <View style={styles.orDivider}>
-                <View
-                  style={[styles.orLine, { backgroundColor: colors.border }]}
-                />
-                <Text style={[styles.orText, { color: colors.muted }]}>
-                  or enter manually
-                </Text>
-                <View
-                  style={[styles.orLine, { backgroundColor: colors.border }]}
-                />
+              <View style={s.orDivider}>
+                <View style={[s.orLine, { backgroundColor: colors.border }]} />
+                <Text style={[s.orText, { color: colors.muted }]}>or enter manually</Text>
+                <View style={[s.orLine, { backgroundColor: colors.border }]} />
               </View>
 
               {/* Server URL */}
-              <View style={styles.fieldGroup}>
-                <Text style={[styles.fieldLabel, { color: colors.muted }]}>
-                  Server URL
-                </Text>
-                <View
-                  style={[styles.inputRow, { borderColor: colors.border }]}
-                >
-                  <MaterialIcons
-                    name="language"
-                    size={18}
-                    color={colors.muted}
-                    style={styles.inputIcon}
-                  />
+              <View style={s.fieldGroup}>
+                <Text style={[s.fieldLabel, { color: colors.muted }]}>Server URL</Text>
+                <View style={[s.inputRow, { borderColor: colors.border, backgroundColor: colors.background }]}>
+                  <MaterialIcons name="language" size={20} color={colors.muted} />
                   <TextInput
-                    style={[styles.input, { color: colors.foreground }]}
+                    style={[s.input, { color: colors.foreground }]}
                     value={editSiteUrl}
-                    onChangeText={(text) => {
-                      setEditSiteUrl(text);
-                      setSaveMessage(null);
-                    }}
+                    onChangeText={(t) => { setEditSiteUrl(t); setSaveMessage(null); }}
                     placeholder="https://your-site.frappe.cloud"
                     placeholderTextColor={colors.muted}
                     autoCapitalize="none"
@@ -488,26 +290,14 @@ export default function SettingsScreen() {
               </View>
 
               {/* API Key */}
-              <View style={styles.fieldGroup}>
-                <Text style={[styles.fieldLabel, { color: colors.muted }]}>
-                  API Key
-                </Text>
-                <View
-                  style={[styles.inputRow, { borderColor: colors.border }]}
-                >
-                  <MaterialIcons
-                    name="vpn-key"
-                    size={18}
-                    color={colors.muted}
-                    style={styles.inputIcon}
-                  />
+              <View style={s.fieldGroup}>
+                <Text style={[s.fieldLabel, { color: colors.muted }]}>API Key</Text>
+                <View style={[s.inputRow, { borderColor: colors.border, backgroundColor: colors.background }]}>
+                  <MaterialIcons name="vpn-key" size={20} color={colors.muted} />
                   <TextInput
-                    style={[styles.input, { color: colors.foreground }]}
+                    style={[s.input, { color: colors.foreground }]}
                     value={editApiKey}
-                    onChangeText={(text) => {
-                      setEditApiKey(text);
-                      setSaveMessage(null);
-                    }}
+                    onChangeText={(t) => { setEditApiKey(t); setSaveMessage(null); }}
                     placeholder="Your API Key"
                     placeholderTextColor={colors.muted}
                     autoCapitalize="none"
@@ -518,26 +308,14 @@ export default function SettingsScreen() {
               </View>
 
               {/* API Secret */}
-              <View style={styles.fieldGroup}>
-                <Text style={[styles.fieldLabel, { color: colors.muted }]}>
-                  API Secret
-                </Text>
-                <View
-                  style={[styles.inputRow, { borderColor: colors.border }]}
-                >
-                  <MaterialIcons
-                    name="lock"
-                    size={18}
-                    color={colors.muted}
-                    style={styles.inputIcon}
-                  />
+              <View style={s.fieldGroup}>
+                <Text style={[s.fieldLabel, { color: colors.muted }]}>API Secret</Text>
+                <View style={[s.inputRow, { borderColor: colors.border, backgroundColor: colors.background }]}>
+                  <MaterialIcons name="lock" size={20} color={colors.muted} />
                   <TextInput
-                    style={[styles.input, { color: colors.foreground }]}
+                    style={[s.input, { color: colors.foreground }]}
                     value={editApiSecret}
-                    onChangeText={(text) => {
-                      setEditApiSecret(text);
-                      setSaveMessage(null);
-                    }}
+                    onChangeText={(t) => { setEditApiSecret(t); setSaveMessage(null); }}
                     placeholder="Your API Secret"
                     placeholderTextColor={colors.muted}
                     autoCapitalize="none"
@@ -545,153 +323,67 @@ export default function SettingsScreen() {
                     secureTextEntry={!showApiSecret}
                     returnKeyType="done"
                   />
-                  <TouchableOpacity
-                    onPress={() => setShowApiSecret(!showApiSecret)}
-                    style={styles.eyeBtn}
-                    activeOpacity={0.6}
-                  >
-                    <MaterialIcons
-                      name={showApiSecret ? "visibility-off" : "visibility"}
-                      size={18}
-                      color={colors.muted}
-                    />
+                  <TouchableOpacity onPress={() => setShowApiSecret(!showApiSecret)} style={s.eyeBtn} activeOpacity={0.6}>
+                    <MaterialIcons name={showApiSecret ? "visibility-off" : "visibility"} size={20} color={colors.muted} />
                   </TouchableOpacity>
                 </View>
               </View>
 
               {/* Status message */}
               {saveMessage && (
-                <View
-                  style={[
-                    styles.messageBox,
-                    {
-                      backgroundColor:
-                        saveMessage.type === "success"
-                          ? colors.success + "15"
-                          : colors.error + "15",
-                      borderColor:
-                        saveMessage.type === "success"
-                          ? colors.success
-                          : colors.error,
-                    },
-                  ]}
-                >
+                <View style={[s.messageBox, {
+                  backgroundColor: saveMessage.type === "success" ? colors.success + "15" : colors.error + "15",
+                  borderColor: saveMessage.type === "success" ? colors.success : colors.error,
+                }]}>
                   <MaterialIcons
-                    name={
-                      saveMessage.type === "success"
-                        ? "check-circle"
-                        : "error-outline"
-                    }
-                    size={16}
-                    color={
-                      saveMessage.type === "success"
-                        ? colors.success
-                        : colors.error
-                    }
+                    name={saveMessage.type === "success" ? "check-circle" : "error-outline"}
+                    size={18}
+                    color={saveMessage.type === "success" ? colors.success : colors.error}
                   />
-                  <Text
-                    style={[
-                      styles.messageText,
-                      {
-                        color:
-                          saveMessage.type === "success"
-                            ? colors.success
-                            : colors.error,
-                      },
-                    ]}
-                  >
+                  <Text style={[s.messageText, { color: saveMessage.type === "success" ? colors.success : colors.error }]}>
                     {saveMessage.text}
                   </Text>
                 </View>
               )}
 
               {/* Action buttons */}
-              <View style={styles.configActions}>
+              <View style={s.configActions}>
                 <TouchableOpacity
-                  style={[
-                    styles.configBtn,
-                    { borderColor: colors.border },
-                  ]}
+                  style={[s.configBtn, { borderColor: colors.border }]}
                   onPress={handleTestConnection}
                   disabled={isTesting}
                   activeOpacity={0.7}
                 >
-                  {isTesting ? (
-                    <ActivityIndicator size="small" color={colors.primary} />
-                  ) : (
-                    <MaterialIcons
-                      name="wifi-tethering"
-                      size={16}
-                      color={colors.primary}
-                    />
-                  )}
-                  <Text style={[styles.configBtnText, { color: colors.primary }]}>
-                    Test
-                  </Text>
+                  {isTesting ? <ActivityIndicator size="small" color={colors.primary} /> : <MaterialIcons name="wifi-tethering" size={18} color={colors.primary} />}
+                  <Text style={[s.configBtnText, { color: colors.primary }]}>Test</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[
-                    styles.configBtn,
-                    { borderColor: colors.border },
-                  ]}
+                  style={[s.configBtn, { borderColor: colors.border }]}
                   onPress={handleResetConfig}
                   activeOpacity={0.7}
                 >
-                  <MaterialIcons
-                    name="undo"
-                    size={16}
-                    color={colors.muted}
-                  />
-                  <Text style={[styles.configBtnText, { color: colors.muted }]}>
-                    Reset
-                  </Text>
+                  <MaterialIcons name="undo" size={18} color={colors.muted} />
+                  <Text style={[s.configBtnText, { color: colors.muted }]}>Reset</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[
-                    styles.configBtn,
-                    styles.configBtnPrimary,
-                    {
-                      backgroundColor: colors.primary,
-                      opacity: isSaving ? 0.6 : 1,
-                    },
-                  ]}
+                  style={[s.configBtn, s.configBtnPrimary, { backgroundColor: colors.primary, opacity: isSaving ? 0.6 : 1 }]}
                   onPress={handleSaveConfig}
                   disabled={isSaving}
                   activeOpacity={0.7}
                 >
-                  {isSaving ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <MaterialIcons name="save" size={16} color="#fff" />
-                  )}
-                  <Text style={[styles.configBtnText, { color: "#fff" }]}>
-                    Save
-                  </Text>
+                  {isSaving ? <ActivityIndicator size="small" color="#fff" /> : <MaterialIcons name="save" size={18} color="#fff" />}
+                  <Text style={[s.configBtnText, { color: "#fff" }]}>Save</Text>
                 </TouchableOpacity>
               </View>
 
-              {/* Connection info hint */}
-              <View
-                style={[
-                  styles.hintBox,
-                  {
-                    backgroundColor: colors.background,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                <MaterialIcons
-                  name="info-outline"
-                  size={14}
-                  color={colors.muted}
-                />
-                <Text style={[styles.hintText, { color: colors.muted }]}>
-                  Generate API keys in your Frappe site under Settings {">"} API
-                  Access. Or scan a QR code provided by your administrator.
-                  {"\n\n"}To link your Driver record, set the "User" field on
-                  your Driver record in Frappe to your login email address.
+              {/* Hint */}
+              <View style={[s.hintBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                <MaterialIcons name="info-outline" size={16} color={colors.muted} />
+                <Text style={[s.hintText, { color: colors.muted }]}>
+                  Generate API keys in your Frappe site under Settings {">"} API Access. Or scan a QR code from your administrator.
+                  {"\n\n"}To link your Driver record, set the "User" field on your Driver record to your login email.
                 </Text>
               </View>
             </View>
@@ -699,253 +391,111 @@ export default function SettingsScreen() {
         </View>
 
         {/* Sync Status */}
-        <Text className="text-sm font-semibold text-muted mb-2 ml-1">
-          SYNC
-        </Text>
-        <View className="bg-surface rounded-2xl border border-border mb-4 overflow-hidden">
-          <SettingRow
-            icon="cloud"
-            iconColor={isOnline ? colors.success : colors.error}
-            label="Status"
-            value={isOnline ? "Online" : "Offline"}
-            valueColor={isOnline ? colors.success : colors.error}
-          />
-          <View className="border-t border-border" />
-          <SettingRow
-            icon="cloud-upload"
-            iconColor={colors.warning}
-            label="Pending Changes"
-            value={String(pendingCount)}
-            valueColor={pendingCount > 0 ? colors.warning : colors.muted}
-          />
-          <View className="border-t border-border" />
-          <SettingRow
-            icon="schedule"
-            iconColor={colors.muted}
-            label="Last Sync"
-            value={formatLastSync()}
-          />
-          <View className="border-t border-border" />
-          <TouchableOpacity
-            className="flex-row items-center gap-3 px-4 py-3.5"
-            onPress={handleSyncNow}
-            disabled={isSyncing}
-            activeOpacity={0.7}
-          >
-            {isSyncing ? (
-              <ActivityIndicator size="small" color={colors.primary} />
-            ) : (
-              <MaterialIcons name="sync" size={20} color={colors.primary} />
-            )}
-            <Text className="text-sm font-medium text-primary flex-1">
-              {isSyncing ? "Syncing..." : "Sync Now"}
-            </Text>
+        <Text style={[s.sectionLabel, { color: colors.muted }]}>SYNC</Text>
+        <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border, padding: 0, overflow: "hidden" }]}>
+          <SettingRow icon="cloud" iconColor={isOnline ? colors.success : colors.error} label="Status" value={isOnline ? "Online" : "Offline"} valueColor={isOnline ? colors.success : colors.error} colors={colors} />
+          <View style={[s.rowDivider, { backgroundColor: colors.border }]} />
+          <SettingRow icon="cloud-upload" iconColor={colors.warning} label="Pending Changes" value={String(pendingCount)} valueColor={pendingCount > 0 ? colors.warning : colors.muted} colors={colors} />
+          <View style={[s.rowDivider, { backgroundColor: colors.border }]} />
+          <SettingRow icon="schedule" iconColor={colors.muted} label="Last Sync" value={formatLastSync()} colors={colors} />
+          <View style={[s.rowDivider, { backgroundColor: colors.border }]} />
+          <TouchableOpacity style={s.actionRow} onPress={handleSyncNow} disabled={isSyncing} activeOpacity={0.7}>
+            {isSyncing ? <ActivityIndicator size="small" color={colors.primary} /> : <MaterialIcons name="sync" size={22} color={colors.primary} />}
+            <Text style={[s.actionText, { color: colors.primary }]}>{isSyncing ? "Syncing..." : "Sync Now"}</Text>
           </TouchableOpacity>
         </View>
 
         {/* Notifications */}
-        <Text className="text-sm font-semibold text-muted mb-2 ml-1">
-          NOTIFICATIONS
-        </Text>
-        <View className="bg-surface rounded-2xl border border-border mb-4 overflow-hidden">
-          <SettingRow
-            icon="notifications"
-            iconColor={notifEnabled ? colors.success : colors.muted}
-            label="Assignment Alerts"
-            value={notifEnabled ? "Enabled" : "Disabled"}
-            valueColor={notifEnabled ? colors.success : colors.muted}
-          />
-          <View className="border-t border-border" />
-          <TouchableOpacity
-            className="flex-row items-center gap-3 px-4 py-3.5"
-            onPress={handleToggleNotifications}
-            activeOpacity={0.7}
-          >
-            <MaterialIcons
-              name={
-                notifEnabled ? "notifications-off" : "notifications-active"
-              }
-              size={20}
-              color={colors.primary}
-            />
-            <Text className="text-sm font-medium text-primary flex-1">
-              {notifEnabled ? "Pause Notifications" : "Enable Notifications"}
-            </Text>
+        <Text style={[s.sectionLabel, { color: colors.muted }]}>NOTIFICATIONS</Text>
+        <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border, padding: 0, overflow: "hidden" }]}>
+          <SettingRow icon="notifications" iconColor={notifEnabled ? colors.success : colors.muted} label="Assignment Alerts" value={notifEnabled ? "Enabled" : "Disabled"} valueColor={notifEnabled ? colors.success : colors.muted} colors={colors} />
+          <View style={[s.rowDivider, { backgroundColor: colors.border }]} />
+          <TouchableOpacity style={s.actionRow} onPress={handleToggleNotifications} activeOpacity={0.7}>
+            <MaterialIcons name={notifEnabled ? "notifications-off" : "notifications-active"} size={22} color={colors.primary} />
+            <Text style={[s.actionText, { color: colors.primary }]}>{notifEnabled ? "Pause Notifications" : "Enable Notifications"}</Text>
           </TouchableOpacity>
         </View>
 
         {/* Sign Out */}
         <TouchableOpacity
-          className="bg-surface rounded-2xl border border-border py-3.5 items-center mt-4"
+          style={[s.signOutBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
           onPress={handleLogout}
           activeOpacity={0.7}
         >
-          <Text className="text-error text-base font-medium">Sign Out</Text>
+          <MaterialIcons name="logout" size={20} color={colors.error} />
+          <Text style={[s.signOutText, { color: colors.error }]}>Sign Out</Text>
         </TouchableOpacity>
 
-        {/* Version & Branding */}
-        <Text className="text-xs text-muted text-center mt-6">
-          Driver v1.4.0
-        </Text>
-        <Text className="text-xs text-muted text-center mt-1">
-          Powered by Agilasoft Cloud Technologies Inc.
-        </Text>
+        {/* Version */}
+        <Text style={[s.version, { color: colors.muted }]}>Driver v1.5.0</Text>
+        <Text style={[s.brand, { color: colors.muted }]}>Powered by Agilasoft Cloud Technologies Inc.</Text>
       </ScrollView>
     </ScreenContainer>
   );
 }
 
-function SettingRow({
-  icon,
-  iconColor,
-  label,
-  value,
-  valueColor,
-}: {
-  icon: string;
-  iconColor: string;
-  label: string;
-  value: string;
-  valueColor?: string;
+function SettingRow({ icon, iconColor, label, value, valueColor, colors }: {
+  icon: string; iconColor: string; label: string; value: string; valueColor?: string; colors: any;
 }) {
-  const colors = useColors();
   return (
-    <View className="flex-row items-center gap-3 px-4 py-3.5">
-      <MaterialIcons name={icon as any} size={20} color={iconColor} />
-      <Text className="text-sm text-foreground flex-1">{label}</Text>
-      <Text
-        className="text-sm font-medium"
-        style={{ color: valueColor || colors.muted }}
-      >
-        {value}
-      </Text>
+    <View style={s.settingRow}>
+      <MaterialIcons name={icon as any} size={22} color={iconColor} />
+      <Text style={[s.settingLabel, { color: colors.foreground }]}>{label}</Text>
+      <Text style={[s.settingValue, { color: valueColor || colors.muted }]}>{value}</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  configHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  configHeaderText: {
-    flex: 1,
-    gap: 2,
-  },
-  configBody: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    gap: 14,
-    borderTopWidth: 0.5,
-  },
+const s = StyleSheet.create({
+  pageTitle: { fontSize: 28, fontWeight: "800", marginBottom: 20, marginTop: 8 },
+  card: { borderRadius: 20, padding: 20, borderWidth: 1, marginBottom: 16 },
+  userRow: { flexDirection: "row", alignItems: "center", gap: 14 },
+  avatar: { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center" },
+  avatarText: { color: "#fff", fontSize: 22, fontWeight: "700" },
+  userName: { fontSize: 17, fontWeight: "700" },
+  userEmail: { fontSize: 14, marginTop: 2 },
+  divider: { height: 0.5, marginVertical: 14 },
+  infoRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 6 },
+  infoText: { fontSize: 14, flex: 1 },
+  infoTextWarn: { fontSize: 13, flex: 1, lineHeight: 19 },
+  diagLink: { flexDirection: "row", alignItems: "center", gap: 6, marginLeft: 28 },
+  diagText: { fontSize: 13, textDecorationLine: "underline" },
+  retryBtn: { flexDirection: "row", alignItems: "center", gap: 6, marginLeft: 28, marginTop: 2 },
+  retryText: { fontSize: 14, fontWeight: "600" },
+  sectionLabel: { fontSize: 13, fontWeight: "700", marginBottom: 8, marginLeft: 4, letterSpacing: 0.5 },
+  configHeader: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 20, paddingVertical: 18 },
+  configTitle: { fontSize: 15, fontWeight: "600" },
+  configSubtitle: { fontSize: 13, marginTop: 2 },
+  configBody: { paddingHorizontal: 20, paddingBottom: 20, gap: 16, borderTopWidth: 0.5 },
   scanQrBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderStyle: "dashed",
-    marginTop: 12,
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12,
+    paddingVertical: 18, borderRadius: 14, borderWidth: 2, borderStyle: "dashed", marginTop: 14,
   },
-  scanQrText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  orDivider: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  orLine: {
-    flex: 1,
-    height: 0.5,
-  },
-  orText: {
-    fontSize: 11,
-    fontWeight: "500",
-  },
-  fieldGroup: {
-    gap: 6,
-  },
-  fieldLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    marginLeft: 2,
-  },
-  inputRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    height: 44,
-  },
-  inputIcon: {
-    marginRight: 8,
-  },
-  input: {
-    flex: 1,
-    fontSize: 14,
-    height: 44,
-  },
-  eyeBtn: {
-    padding: 4,
-    marginLeft: 4,
-  },
-  messageBox: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 8,
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  messageText: {
-    flex: 1,
-    fontSize: 12,
-    lineHeight: 17,
-    fontWeight: "500",
-  },
-  configActions: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 2,
-  },
-  configBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  configBtnPrimary: {
-    flex: 1,
-    justifyContent: "center",
-    borderWidth: 0,
-  },
-  configBtnText: {
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  hintBox: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 8,
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 0.5,
-  },
-  hintText: {
-    flex: 1,
-    fontSize: 11,
-    lineHeight: 16,
-  },
+  scanQrText: { fontSize: 15, fontWeight: "700" },
+  orDivider: { flexDirection: "row", alignItems: "center", gap: 12 },
+  orLine: { flex: 1, height: 0.5 },
+  orText: { fontSize: 12, fontWeight: "500" },
+  fieldGroup: { gap: 8 },
+  fieldLabel: { fontSize: 13, fontWeight: "600", marginLeft: 2 },
+  inputRow: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, height: 52, gap: 10 },
+  input: { flex: 1, fontSize: 15, height: 52 },
+  eyeBtn: { padding: 6 },
+  messageBox: { flexDirection: "row", alignItems: "flex-start", gap: 10, padding: 14, borderRadius: 12, borderWidth: 1 },
+  messageText: { flex: 1, fontSize: 13, lineHeight: 19, fontWeight: "500" },
+  configActions: { flexDirection: "row", gap: 10, marginTop: 4 },
+  configBtn: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 18, paddingVertical: 14, borderRadius: 14, borderWidth: 1 },
+  configBtnPrimary: { flex: 1, justifyContent: "center", borderWidth: 0 },
+  configBtnText: { fontSize: 14, fontWeight: "700" },
+  hintBox: { flexDirection: "row", alignItems: "flex-start", gap: 10, padding: 14, borderRadius: 12, borderWidth: 0.5 },
+  hintText: { flex: 1, fontSize: 12, lineHeight: 18 },
+  settingRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, paddingVertical: 16 },
+  settingLabel: { fontSize: 15, flex: 1 },
+  settingValue: { fontSize: 15, fontWeight: "600" },
+  rowDivider: { height: 0.5, marginHorizontal: 20 },
+  actionRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, paddingVertical: 16 },
+  actionText: { fontSize: 15, fontWeight: "600", flex: 1 },
+  signOutBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 20, borderWidth: 1, paddingVertical: 18, marginTop: 8 },
+  signOutText: { fontSize: 16, fontWeight: "700" },
+  version: { fontSize: 13, textAlign: "center", marginTop: 24 },
+  brand: { fontSize: 12, textAlign: "center", marginTop: 4 },
 });

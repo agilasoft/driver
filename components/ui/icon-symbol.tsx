@@ -19,6 +19,7 @@ const MAPPING = {
   "doc.text.fill": "description",
   "gearshape.fill": "settings",
   "shippingbox.fill": "local-shipping",
+  "map.fill": "map",
 } as IconMapping;
 
 /**

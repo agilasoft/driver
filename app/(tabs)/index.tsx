@@ -4,9 +4,9 @@ import {
   Text,
   FlatList,
   RefreshControl,
-  Pressable,
-  ActivityIndicator,
   TouchableOpacity,
+  ActivityIndicator,
+  StyleSheet,
 } from "react-native";
 import { useRouter } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
@@ -49,27 +49,29 @@ export default function RunSheetsScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
 
-  const loadData = useCallback(async (showRefresh = false) => {
-    if (showRefresh) setIsRefreshing(true);
-    else setIsLoading(true);
+  const loadData = useCallback(
+    async (showRefresh = false) => {
+      if (showRefresh) setIsRefreshing(true);
+      else setIsLoading(true);
 
-    try {
-      if (isOnline) {
-        const data = await refreshRunSheets();
-        setSheets(data);
-      } else {
+      try {
+        if (isOnline) {
+          const data = await refreshRunSheets();
+          setSheets(data);
+        } else {
+          const cached = await getCachedRunSheets();
+          setSheets(cached);
+        }
+      } catch {
         const cached = await getCachedRunSheets();
         setSheets(cached);
+      } finally {
+        setIsLoading(false);
+        setIsRefreshing(false);
       }
-    } catch (error) {
-      // Fallback to cache
-      const cached = await getCachedRunSheets();
-      setSheets(cached);
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, [isOnline]);
+    },
+    [isOnline]
+  );
 
   useEffect(() => {
     loadData();
@@ -78,9 +80,7 @@ export default function RunSheetsScreen() {
   // Apply client-side date filter
   const filteredSheets = useMemo(() => {
     if (dateFilter === "all") return sheets;
-
     const cutoff = dateFilter === "today" ? getStartOfDay() : getStartOfWeek();
-
     return sheets.filter((s) => {
       if (!s.run_date) return false;
       try {
@@ -106,75 +106,110 @@ export default function RunSheetsScreen() {
     }
   };
 
-  const renderItem = ({ item }: { item: RunSheet }) => (
-    <Pressable
-      onPress={() =>
-        router.push({
-          pathname: "/run-sheet/[id]",
-          params: { id: item.name },
-        })
-      }
-      style={({ pressed }) => [pressed ? { opacity: 0.7 } : {}]}
-    >
-      <View className="bg-surface rounded-2xl p-4 mx-4 mb-3 border border-border">
+  const renderItem = ({ item }: { item: RunSheet }) => {
+    const isActive =
+      item.status === "Dispatched" || item.status === "In-Progress";
+    return (
+      <TouchableOpacity
+        onPress={() =>
+          router.push({
+            pathname: "/run-sheet/[id]",
+            params: { id: item.name },
+          })
+        }
+        activeOpacity={0.7}
+        style={[
+          styles.card,
+          {
+            backgroundColor: colors.surface,
+            borderColor: isActive ? colors.primary : colors.border,
+            borderWidth: isActive ? 1.5 : 1,
+          },
+        ]}
+      >
         {/* Header row */}
-        <View className="flex-row items-center justify-between mb-2">
-          <Text className="text-base font-bold text-foreground" numberOfLines={1}>
-            {item.name}
-          </Text>
+        <View style={styles.cardHeader}>
+          <View style={styles.cardHeaderLeft}>
+            {isActive && (
+              <View
+                style={[styles.activeDot, { backgroundColor: colors.primary }]}
+              />
+            )}
+            <Text
+              style={[styles.cardTitle, { color: colors.foreground }]}
+              numberOfLines={1}
+            >
+              {item.name}
+            </Text>
+          </View>
           <StatusBadge status={item.status} />
         </View>
 
         {/* Route name */}
         {item.route_name ? (
-          <Text className="text-sm text-muted mb-2" numberOfLines={1}>
+          <Text
+            style={[styles.routeName, { color: colors.foreground }]}
+            numberOfLines={1}
+          >
             {item.route_name}
           </Text>
         ) : null}
 
-        {/* Info row */}
-        <View className="flex-row items-center gap-4">
-          <View className="flex-row items-center gap-1">
+        {/* Info chips row */}
+        <View style={styles.infoRow}>
+          <View style={[styles.infoChip, { backgroundColor: colors.background }]}>
             <MaterialIcons name="event" size={14} color={colors.muted} />
-            <Text className="text-xs text-muted">{formatDate(item.run_date)}</Text>
+            <Text style={[styles.infoChipText, { color: colors.muted }]}>
+              {formatDate(item.run_date)}
+            </Text>
           </View>
           {item.vehicle ? (
-            <View className="flex-row items-center gap-1">
-              <MaterialIcons name="local-shipping" size={14} color={colors.muted} />
-              <Text className="text-xs text-muted">{item.vehicle}</Text>
+            <View
+              style={[styles.infoChip, { backgroundColor: colors.background }]}
+            >
+              <MaterialIcons
+                name="local-shipping"
+                size={14}
+                color={colors.muted}
+              />
+              <Text style={[styles.infoChipText, { color: colors.muted }]}>
+                {item.vehicle}
+              </Text>
             </View>
           ) : null}
           {item.run_type ? (
-            <View className="flex-row items-center gap-1">
+            <View
+              style={[styles.infoChip, { backgroundColor: colors.background }]}
+            >
               <MaterialIcons name="label" size={14} color={colors.muted} />
-              <Text className="text-xs text-muted">{item.run_type}</Text>
+              <Text style={[styles.infoChipText, { color: colors.muted }]}>
+                {item.run_type}
+              </Text>
             </View>
           ) : null}
         </View>
 
-        {/* Driver info */}
-        {item.driver_name ? (
-          <View className="flex-row items-center gap-1 mt-2">
-            <MaterialIcons name="person" size={14} color={colors.muted} />
-            <Text className="text-xs text-muted">{item.driver_name}</Text>
-          </View>
-        ) : null}
-
         {/* Chevron */}
-        <View className="absolute right-4 top-0 bottom-0 justify-center">
-          <MaterialIcons name="chevron-right" size={20} color={colors.border} />
+        <View style={styles.chevron}>
+          <MaterialIcons name="chevron-right" size={22} color={colors.border} />
         </View>
-      </View>
-    </Pressable>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   const renderEmpty = () => {
     if (isLoading) return null;
     return (
-      <View className="flex-1 items-center justify-center py-20">
-        <MaterialIcons name="description" size={48} color={colors.border} />
-        <Text className="text-base text-muted mt-4">No run sheets found</Text>
-        <Text className="text-sm text-muted mt-1">
+      <View style={styles.emptyContainer}>
+        <View
+          style={[styles.emptyIconCircle, { backgroundColor: colors.surface }]}
+        >
+          <MaterialIcons name="description" size={44} color={colors.border} />
+        </View>
+        <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+          No Run Sheets
+        </Text>
+        <Text style={[styles.emptySubtitle, { color: colors.muted }]}>
           {dateFilter !== "all"
             ? "Try selecting a different date range"
             : auth?.driverId
@@ -185,57 +220,67 @@ export default function RunSheetsScreen() {
     );
   };
 
-  const filterOptions: { key: DateFilter; label: string }[] = [
-    { key: "today", label: "Today" },
-    { key: "week", label: "This Week" },
-    { key: "all", label: "All" },
+  const filterOptions: { key: DateFilter; label: string; icon: string }[] = [
+    { key: "today", label: "Today", icon: "today" },
+    { key: "week", label: "This Week", icon: "date-range" },
+    { key: "all", label: "All", icon: "list" },
   ];
 
   return (
     <ScreenContainer>
       {/* Header */}
-      <View className="px-4 pt-2 pb-2">
-        <Text className="text-2xl font-bold text-foreground">Run Sheets</Text>
+      <View style={styles.header}>
+        <Text style={[styles.headerTitle, { color: colors.foreground }]}>
+          Run Sheets
+        </Text>
         {auth?.driverName ? (
-          <Text className="text-sm text-muted mt-0.5">{auth.driverName}</Text>
+          <Text style={[styles.headerSubtitle, { color: colors.muted }]}>
+            {auth.driverName}
+          </Text>
         ) : auth?.fullName ? (
-          <Text className="text-sm text-muted mt-0.5">{auth.fullName}</Text>
+          <Text style={[styles.headerSubtitle, { color: colors.muted }]}>
+            {auth.fullName}
+          </Text>
         ) : null}
       </View>
 
       {/* Date Filter Chips */}
-      <View className="flex-row gap-2 px-4 pb-3">
-        {filterOptions.map((opt) => (
-          <TouchableOpacity
-            key={opt.key}
-            onPress={() => setDateFilter(opt.key)}
-            activeOpacity={0.7}
-            style={[
-              {
-                paddingHorizontal: 14,
-                paddingVertical: 7,
-                borderRadius: 20,
-                borderWidth: 1,
-                borderColor: dateFilter === opt.key ? colors.primary : colors.border,
-                backgroundColor: dateFilter === opt.key ? colors.primary : colors.surface,
-              },
-            ]}
-          >
-            <Text
-              style={{
-                fontSize: 13,
-                fontWeight: "600",
-                color: dateFilter === opt.key ? "#fff" : colors.muted,
-              }}
+      <View style={styles.filterRow}>
+        {filterOptions.map((opt) => {
+          const isSelected = dateFilter === opt.key;
+          return (
+            <TouchableOpacity
+              key={opt.key}
+              onPress={() => setDateFilter(opt.key)}
+              activeOpacity={0.7}
+              style={[
+                styles.filterChip,
+                {
+                  borderColor: isSelected ? colors.primary : colors.border,
+                  backgroundColor: isSelected ? colors.primary : colors.surface,
+                },
+              ]}
             >
-              {opt.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
+              <MaterialIcons
+                name={opt.icon as any}
+                size={16}
+                color={isSelected ? "#fff" : colors.muted}
+              />
+              <Text
+                style={[
+                  styles.filterChipText,
+                  { color: isSelected ? "#fff" : colors.muted },
+                ]}
+              >
+                {opt.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
         {dateFilter !== "all" ? (
-          <View className="flex-1 items-end justify-center">
-            <Text className="text-xs text-muted">
-              {filteredSheets.length} of {sheets.length}
+          <View style={styles.filterCount}>
+            <Text style={[styles.filterCountText, { color: colors.muted }]}>
+              {filteredSheets.length}/{sheets.length}
             </Text>
           </View>
         ) : null}
@@ -244,9 +289,11 @@ export default function RunSheetsScreen() {
       <ConnectivityBanner />
 
       {isLoading ? (
-        <View className="flex-1 items-center justify-center">
+        <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text className="text-sm text-muted mt-3">Loading run sheets...</Text>
+          <Text style={[styles.loadingText, { color: colors.muted }]}>
+            Loading run sheets...
+          </Text>
         </View>
       ) : (
         <FlatList
@@ -254,7 +301,11 @@ export default function RunSheetsScreen() {
           keyExtractor={(item) => item.name}
           renderItem={renderItem}
           ListEmptyComponent={renderEmpty}
-          contentContainerStyle={{ paddingTop: 4, paddingBottom: 20, flexGrow: filteredSheets.length === 0 ? 1 : undefined }}
+          contentContainerStyle={{
+            paddingTop: 8,
+            paddingBottom: 24,
+            flexGrow: filteredSheets.length === 0 ? 1 : undefined,
+          }}
           refreshControl={
             <RefreshControl
               refreshing={isRefreshing}
@@ -267,3 +318,140 @@ export default function RunSheetsScreen() {
     </ScreenContainer>
   );
 }
+
+const styles = StyleSheet.create({
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 6,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    marginTop: 2,
+  },
+  filterRow: {
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+    alignItems: "center",
+  },
+  filterChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 22,
+    borderWidth: 1,
+  },
+  filterChipText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  filterCount: {
+    flex: 1,
+    alignItems: "flex-end",
+  },
+  filterCountText: {
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  card: {
+    borderRadius: 16,
+    padding: 16,
+    marginHorizontal: 16,
+    marginBottom: 10,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 6,
+    paddingRight: 24,
+  },
+  cardHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+  },
+  activeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    flex: 1,
+  },
+  routeName: {
+    fontSize: 14,
+    fontWeight: "500",
+    marginBottom: 10,
+  },
+  infoRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  infoChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  infoChipText: {
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  chevron: {
+    position: "absolute",
+    right: 14,
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
+  },
+  emptyContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 60,
+    paddingHorizontal: 32,
+  },
+  emptyIconCircle: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    marginTop: 16,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    marginTop: 6,
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loadingText: {
+    fontSize: 14,
+    marginTop: 12,
+  },
+});
