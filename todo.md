@@ -28,3 +28,5 @@
 - [x] Route map view for pick/drop locations on run sheet detail
 - [x] Barcode/QR scanning for package verification at pick/drop
 - [x] Run sheet status updates (In-Progress, Completed) from the app
+- [x] Fix: Server config save not working in Settings
+- [x] QR code scanning to configure server connection

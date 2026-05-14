@@ -16,6 +16,7 @@ import { ScreenContainer } from "@/components/screen-container";
 import { useAuth } from "@/lib/auth-context";
 import { useSync } from "@/lib/sync-context";
 import { useColors } from "@/hooks/use-colors";
+import { useRouter, useFocusEffect, useLocalSearchParams } from "expo-router";
 import {
   requestNotificationPermissions,
   startAssignmentPolling,
@@ -26,6 +27,12 @@ export default function SettingsScreen() {
   const { auth, logout, updateCredentials } = useAuth();
   const { isOnline, pendingCount, isSyncing, lastSync, syncNow } = useSync();
   const colors = useColors();
+  const router = useRouter();
+  const params = useLocalSearchParams<{
+    scannedSiteUrl?: string;
+    scannedApiKey?: string;
+    scannedApiSecret?: string;
+  }>();
   const [notifEnabled, setNotifEnabled] = useState(false);
 
   // Configuration editing state
@@ -35,27 +42,45 @@ export default function SettingsScreen() {
   const [editApiSecret, setEditApiSecret] = useState(auth?.apiSecret || "");
   const [showApiSecret, setShowApiSecret] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [configDirty, setConfigDirty] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
 
-  // Sync form fields with auth state when it changes
+  // Sync form fields with auth state on first load
   useEffect(() => {
     if (auth) {
       setEditSiteUrl(auth.siteUrl);
       setEditApiKey(auth.apiKey);
       setEditApiSecret(auth.apiSecret);
-      setConfigDirty(false);
     }
-  }, [auth]);
+  }, [auth?.siteUrl, auth?.apiKey, auth?.apiSecret]);
 
-  // Track if any field has changed
+  // Handle scanned QR config params
   useEffect(() => {
-    if (!auth) return;
-    const dirty =
-      editSiteUrl.trim() !== auth.siteUrl ||
+    if (params.scannedSiteUrl && params.scannedApiKey && params.scannedApiSecret) {
+      setEditSiteUrl(params.scannedSiteUrl);
+      setEditApiKey(params.scannedApiKey);
+      setEditApiSecret(params.scannedApiSecret);
+      setConfigExpanded(true);
+      setSaveMessage({
+        type: "success",
+        text: "QR config loaded. Tap Save to apply.",
+      });
+    }
+  }, [params.scannedSiteUrl, params.scannedApiKey, params.scannedApiSecret]);
+
+  // Check if fields have changed from stored auth
+  const hasChanges = useCallback(() => {
+    if (!auth) return false;
+    const normalizeUrl = (url: string) => url.trim().replace(/\/+$/, "");
+    return (
+      normalizeUrl(editSiteUrl) !== normalizeUrl(auth.siteUrl) ||
       editApiKey.trim() !== auth.apiKey ||
-      editApiSecret.trim() !== auth.apiSecret;
-    setConfigDirty(dirty);
-  }, [editSiteUrl, editApiKey, editApiSecret, auth]);
+      editApiSecret.trim() !== auth.apiSecret
+    );
+  }, [auth, editSiteUrl, editApiKey, editApiSecret]);
 
   // Check notification permission status
   const checkNotifPermission = useCallback(async () => {
@@ -80,9 +105,15 @@ export default function SettingsScreen() {
       if (granted) {
         setNotifEnabled(true);
         startAssignmentPolling();
-        Alert.alert("Notifications Enabled", "You will be notified when new run sheets are assigned to you.");
+        Alert.alert(
+          "Notifications Enabled",
+          "You will be notified when new run sheets are assigned to you."
+        );
       } else {
-        Alert.alert("Permission Required", "Please enable notifications in your device settings.");
+        Alert.alert(
+          "Permission Required",
+          "Please enable notifications in your device settings."
+        );
       }
     }
   };
@@ -93,28 +124,40 @@ export default function SettingsScreen() {
     const secret = editApiSecret.trim();
 
     if (!url) {
-      Alert.alert("Validation Error", "Server URL is required.");
+      setSaveMessage({ type: "error", text: "Server URL is required." });
       return;
     }
     if (!key) {
-      Alert.alert("Validation Error", "API Key is required.");
+      setSaveMessage({ type: "error", text: "API Key is required." });
       return;
     }
     if (!secret) {
-      Alert.alert("Validation Error", "API Secret is required.");
+      setSaveMessage({ type: "error", text: "API Secret is required." });
       return;
     }
 
+    // Normalize URL
+    let normalizedUrl = url;
+    if (!normalizedUrl.startsWith("http://") && !normalizedUrl.startsWith("https://")) {
+      normalizedUrl = "https://" + normalizedUrl;
+    }
+    normalizedUrl = normalizedUrl.replace(/\/+$/, "");
+
     setIsSaving(true);
+    setSaveMessage(null);
     try {
-      await updateCredentials(url, key, secret);
-      setConfigDirty(false);
-      Alert.alert("Configuration Saved", "Your connection settings have been verified and saved successfully.");
+      await updateCredentials(normalizedUrl, key, secret);
+      setSaveMessage({
+        type: "success",
+        text: "Configuration saved and verified successfully.",
+      });
     } catch (error: any) {
-      Alert.alert(
-        "Connection Failed",
-        error?.message || "Could not connect with the provided credentials. Please check your settings and try again."
-      );
+      setSaveMessage({
+        type: "error",
+        text:
+          error?.message ||
+          "Could not connect with the provided credentials. Please check your settings.",
+      });
     } finally {
       setIsSaving(false);
     }
@@ -125,6 +168,7 @@ export default function SettingsScreen() {
       setEditSiteUrl(auth.siteUrl);
       setEditApiKey(auth.apiKey);
       setEditApiSecret(auth.apiSecret);
+      setSaveMessage(null);
     }
   };
 
@@ -134,32 +178,62 @@ export default function SettingsScreen() {
     const secret = editApiSecret.trim();
 
     if (!url || !key || !secret) {
-      Alert.alert("Missing Fields", "Please fill in all connection fields before testing.");
+      setSaveMessage({
+        type: "error",
+        text: "Please fill in all connection fields before testing.",
+      });
       return;
     }
 
-    setIsSaving(true);
+    let normalizedUrl = url;
+    if (!normalizedUrl.startsWith("http://") && !normalizedUrl.startsWith("https://")) {
+      normalizedUrl = "https://" + normalizedUrl;
+    }
+    normalizedUrl = normalizedUrl.replace(/\/+$/, "");
+
+    setIsTesting(true);
+    setSaveMessage(null);
     try {
-      const baseUrl = url.replace(/\/+$/, "");
-      const res = await fetch(`${baseUrl}/api/method/frappe.auth.get_logged_user`, {
-        method: "GET",
-        headers: {
-          Authorization: `token ${key}:${secret}`,
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-      });
+      const res = await fetch(
+        `${normalizedUrl}/api/method/frappe.auth.get_logged_user`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `token ${key}:${secret}`,
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+        }
+      );
       if (res.ok) {
         const data = await res.json();
-        Alert.alert("Connection Successful", `Connected as: ${data.message || "Unknown"}`);
+        setSaveMessage({
+          type: "success",
+          text: `Connection successful! Logged in as: ${data.message || "Unknown"}`,
+        });
       } else {
-        Alert.alert("Connection Failed", `Server returned status ${res.status}. Check your credentials.`);
+        setSaveMessage({
+          type: "error",
+          text: `Server returned status ${res.status}. Check your credentials.`,
+        });
       }
     } catch (error: any) {
-      Alert.alert("Connection Error", error?.message || "Could not reach the server. Check the URL and your network.");
+      setSaveMessage({
+        type: "error",
+        text:
+          error?.message ||
+          "Could not reach the server. Check the URL and your network.",
+      });
     } finally {
-      setIsSaving(false);
+      setIsTesting(false);
     }
+  };
+
+  const handleScanQR = () => {
+    router.push({
+      pathname: "/config-scanner",
+      params: { source: "settings" },
+    });
   };
 
   const handleLogout = () => {
@@ -202,24 +276,26 @@ export default function SettingsScreen() {
     }
   };
 
-  // Mask the API secret for display
-  const maskedSecret = (s: string) => {
-    if (!s) return "";
-    if (s.length <= 8) return "****";
-    return s.substring(0, 4) + "****" + s.substring(s.length - 4);
-  };
+  const configDirty = hasChanges();
 
   return (
     <ScreenContainer className="px-4 pt-2">
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
-        <Text className="text-2xl font-bold text-foreground mb-6">Settings</Text>
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: 40 }}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text className="text-2xl font-bold text-foreground mb-6">
+          Settings
+        </Text>
 
         {/* User Info */}
         <View className="bg-surface rounded-2xl p-4 border border-border mb-4">
           <View className="flex-row items-center gap-3 mb-3">
             <View className="w-12 h-12 rounded-full bg-primary items-center justify-center">
               <Text className="text-white text-lg font-bold">
-                {(auth?.fullName || auth?.userName || "?").charAt(0).toUpperCase()}
+                {(auth?.fullName || auth?.userName || "?")
+                  .charAt(0)
+                  .toUpperCase()}
               </Text>
             </View>
             <View className="flex-1">
@@ -233,22 +309,40 @@ export default function SettingsScreen() {
           <View className="border-t border-border pt-3 mt-1 gap-2">
             <View className="flex-row items-center gap-2">
               <MaterialIcons name="language" size={16} color={colors.muted} />
-              <Text className="text-xs text-muted flex-1" numberOfLines={1}>
+              <Text
+                className="text-xs text-muted flex-1"
+                numberOfLines={1}
+              >
                 {auth?.siteUrl}
               </Text>
             </View>
             {auth?.driverId ? (
               <View className="flex-row items-center gap-2">
-                <MaterialIcons name="badge" size={16} color={colors.primary} />
-                <Text className="text-xs text-primary flex-1" numberOfLines={1}>
+                <MaterialIcons
+                  name="badge"
+                  size={16}
+                  color={colors.primary}
+                />
+                <Text
+                  className="text-xs text-primary flex-1"
+                  numberOfLines={1}
+                >
                   Driver: {auth.driverName || auth.driverId}
                 </Text>
               </View>
             ) : (
               <View className="flex-row items-center gap-2">
-                <MaterialIcons name="warning" size={16} color={colors.warning} />
-                <Text className="text-xs text-warning flex-1" numberOfLines={2}>
-                  No Driver record linked to this user. All run sheets will be shown.
+                <MaterialIcons
+                  name="warning"
+                  size={16}
+                  color={colors.warning}
+                />
+                <Text
+                  className="text-xs text-warning flex-1"
+                  numberOfLines={2}
+                >
+                  No Driver record linked to this user. All run sheets will be
+                  shown.
                 </Text>
               </View>
             )}
@@ -256,17 +350,28 @@ export default function SettingsScreen() {
         </View>
 
         {/* Configuration */}
-        <Text className="text-sm font-semibold text-muted mb-2 ml-1">CONFIGURATION</Text>
+        <Text className="text-sm font-semibold text-muted mb-2 ml-1">
+          CONFIGURATION
+        </Text>
         <View className="bg-surface rounded-2xl border border-border mb-4 overflow-hidden">
           {/* Collapsed summary */}
           <TouchableOpacity
             style={styles.configHeader}
-            onPress={() => setConfigExpanded(!configExpanded)}
+            onPress={() => {
+              setConfigExpanded(!configExpanded);
+              setSaveMessage(null);
+            }}
             activeOpacity={0.7}
           >
-            <MaterialIcons name="settings-ethernet" size={20} color={colors.primary} />
+            <MaterialIcons
+              name="settings-ethernet"
+              size={20}
+              color={colors.primary}
+            />
             <View style={styles.configHeaderText}>
-              <Text className="text-sm font-medium text-foreground">Server Connection</Text>
+              <Text className="text-sm font-medium text-foreground">
+                Server Connection
+              </Text>
               <Text className="text-xs text-muted" numberOfLines={1}>
                 {auth?.siteUrl || "Not configured"}
               </Text>
@@ -279,16 +384,60 @@ export default function SettingsScreen() {
           </TouchableOpacity>
 
           {configExpanded && (
-            <View style={styles.configBody}>
+            <View style={[styles.configBody, { borderTopColor: colors.border }]}>
+              {/* Scan QR Button */}
+              <TouchableOpacity
+                style={[
+                  styles.scanQrBtn,
+                  { borderColor: colors.primary, backgroundColor: colors.background },
+                ]}
+                onPress={handleScanQR}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons
+                  name="qr-code-scanner"
+                  size={20}
+                  color={colors.primary}
+                />
+                <Text style={[styles.scanQrText, { color: colors.primary }]}>
+                  Scan QR Code to Configure
+                </Text>
+              </TouchableOpacity>
+
+              {/* Divider with "or" */}
+              <View style={styles.orDivider}>
+                <View
+                  style={[styles.orLine, { backgroundColor: colors.border }]}
+                />
+                <Text style={[styles.orText, { color: colors.muted }]}>
+                  or enter manually
+                </Text>
+                <View
+                  style={[styles.orLine, { backgroundColor: colors.border }]}
+                />
+              </View>
+
               {/* Server URL */}
               <View style={styles.fieldGroup}>
-                <Text style={[styles.fieldLabel, { color: colors.muted }]}>Server URL</Text>
-                <View style={[styles.inputRow, { borderColor: colors.border }]}>
-                  <MaterialIcons name="language" size={18} color={colors.muted} style={styles.inputIcon} />
+                <Text style={[styles.fieldLabel, { color: colors.muted }]}>
+                  Server URL
+                </Text>
+                <View
+                  style={[styles.inputRow, { borderColor: colors.border }]}
+                >
+                  <MaterialIcons
+                    name="language"
+                    size={18}
+                    color={colors.muted}
+                    style={styles.inputIcon}
+                  />
                   <TextInput
                     style={[styles.input, { color: colors.foreground }]}
                     value={editSiteUrl}
-                    onChangeText={setEditSiteUrl}
+                    onChangeText={(text) => {
+                      setEditSiteUrl(text);
+                      setSaveMessage(null);
+                    }}
                     placeholder="https://your-site.frappe.cloud"
                     placeholderTextColor={colors.muted}
                     autoCapitalize="none"
@@ -301,13 +450,25 @@ export default function SettingsScreen() {
 
               {/* API Key */}
               <View style={styles.fieldGroup}>
-                <Text style={[styles.fieldLabel, { color: colors.muted }]}>API Key</Text>
-                <View style={[styles.inputRow, { borderColor: colors.border }]}>
-                  <MaterialIcons name="vpn-key" size={18} color={colors.muted} style={styles.inputIcon} />
+                <Text style={[styles.fieldLabel, { color: colors.muted }]}>
+                  API Key
+                </Text>
+                <View
+                  style={[styles.inputRow, { borderColor: colors.border }]}
+                >
+                  <MaterialIcons
+                    name="vpn-key"
+                    size={18}
+                    color={colors.muted}
+                    style={styles.inputIcon}
+                  />
                   <TextInput
                     style={[styles.input, { color: colors.foreground }]}
                     value={editApiKey}
-                    onChangeText={setEditApiKey}
+                    onChangeText={(text) => {
+                      setEditApiKey(text);
+                      setSaveMessage(null);
+                    }}
                     placeholder="Your API Key"
                     placeholderTextColor={colors.muted}
                     autoCapitalize="none"
@@ -319,13 +480,25 @@ export default function SettingsScreen() {
 
               {/* API Secret */}
               <View style={styles.fieldGroup}>
-                <Text style={[styles.fieldLabel, { color: colors.muted }]}>API Secret</Text>
-                <View style={[styles.inputRow, { borderColor: colors.border }]}>
-                  <MaterialIcons name="lock" size={18} color={colors.muted} style={styles.inputIcon} />
+                <Text style={[styles.fieldLabel, { color: colors.muted }]}>
+                  API Secret
+                </Text>
+                <View
+                  style={[styles.inputRow, { borderColor: colors.border }]}
+                >
+                  <MaterialIcons
+                    name="lock"
+                    size={18}
+                    color={colors.muted}
+                    style={styles.inputIcon}
+                  />
                   <TextInput
                     style={[styles.input, { color: colors.foreground }]}
                     value={editApiSecret}
-                    onChangeText={setEditApiSecret}
+                    onChangeText={(text) => {
+                      setEditApiSecret(text);
+                      setSaveMessage(null);
+                    }}
                     placeholder="Your API Secret"
                     placeholderTextColor={colors.muted}
                     autoCapitalize="none"
@@ -347,31 +520,93 @@ export default function SettingsScreen() {
                 </View>
               </View>
 
+              {/* Status message */}
+              {saveMessage && (
+                <View
+                  style={[
+                    styles.messageBox,
+                    {
+                      backgroundColor:
+                        saveMessage.type === "success"
+                          ? colors.success + "15"
+                          : colors.error + "15",
+                      borderColor:
+                        saveMessage.type === "success"
+                          ? colors.success
+                          : colors.error,
+                    },
+                  ]}
+                >
+                  <MaterialIcons
+                    name={
+                      saveMessage.type === "success"
+                        ? "check-circle"
+                        : "error-outline"
+                    }
+                    size={16}
+                    color={
+                      saveMessage.type === "success"
+                        ? colors.success
+                        : colors.error
+                    }
+                  />
+                  <Text
+                    style={[
+                      styles.messageText,
+                      {
+                        color:
+                          saveMessage.type === "success"
+                            ? colors.success
+                            : colors.error,
+                      },
+                    ]}
+                  >
+                    {saveMessage.text}
+                  </Text>
+                </View>
+              )}
+
               {/* Action buttons */}
               <View style={styles.configActions}>
                 <TouchableOpacity
                   style={[styles.configBtn, { borderColor: colors.border }]}
                   onPress={handleTestConnection}
-                  disabled={isSaving}
+                  disabled={isTesting || isSaving}
                   activeOpacity={0.7}
                 >
-                  {isSaving ? (
+                  {isTesting ? (
                     <ActivityIndicator size="small" color={colors.primary} />
                   ) : (
-                    <MaterialIcons name="wifi-tethering" size={16} color={colors.primary} />
+                    <MaterialIcons
+                      name="wifi-tethering"
+                      size={16}
+                      color={colors.primary}
+                    />
                   )}
-                  <Text style={[styles.configBtnText, { color: colors.primary }]}>Test</Text>
+                  <Text
+                    style={[styles.configBtnText, { color: colors.primary }]}
+                  >
+                    Test
+                  </Text>
                 </TouchableOpacity>
 
                 {configDirty && (
                   <TouchableOpacity
                     style={[styles.configBtn, { borderColor: colors.border }]}
                     onPress={handleResetConfig}
-                    disabled={isSaving}
+                    disabled={isSaving || isTesting}
                     activeOpacity={0.7}
                   >
-                    <MaterialIcons name="undo" size={16} color={colors.muted} />
-                    <Text style={[styles.configBtnText, { color: colors.muted }]}>Reset</Text>
+                    <MaterialIcons
+                      name="undo"
+                      size={16}
+                      color={colors.muted}
+                    />
+                    <Text
+                      style={[styles.configBtnText, { color: colors.muted }]}
+                    >
+                      Reset
+                    </Text>
                   </TouchableOpacity>
                 )}
 
@@ -379,33 +614,44 @@ export default function SettingsScreen() {
                   style={[
                     styles.configBtn,
                     styles.configBtnPrimary,
-                    { backgroundColor: configDirty ? colors.primary : colors.border },
+                    {
+                      backgroundColor: colors.primary,
+                      opacity: isSaving || isTesting ? 0.6 : 1,
+                    },
                   ]}
                   onPress={handleSaveConfig}
-                  disabled={isSaving || !configDirty}
+                  disabled={isSaving || isTesting}
                   activeOpacity={0.7}
                 >
                   {isSaving ? (
                     <ActivityIndicator size="small" color="#fff" />
                   ) : (
-                    <MaterialIcons name="save" size={16} color={configDirty ? "#fff" : colors.muted} />
+                    <MaterialIcons name="save" size={16} color="#fff" />
                   )}
-                  <Text
-                    style={[
-                      styles.configBtnText,
-                      { color: configDirty ? "#fff" : colors.muted },
-                    ]}
-                  >
+                  <Text style={[styles.configBtnText, { color: "#fff" }]}>
                     Save
                   </Text>
                 </TouchableOpacity>
               </View>
 
               {/* Connection info hint */}
-              <View style={[styles.hintBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                <MaterialIcons name="info-outline" size={14} color={colors.muted} />
+              <View
+                style={[
+                  styles.hintBox,
+                  {
+                    backgroundColor: colors.background,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <MaterialIcons
+                  name="info-outline"
+                  size={14}
+                  color={colors.muted}
+                />
                 <Text style={[styles.hintText, { color: colors.muted }]}>
-                  Generate API keys in your Frappe site under Settings {'>'} API Access. The server URL should include the protocol (https://).
+                  Generate API keys in your Frappe site under Settings {">"} API
+                  Access. Or scan a QR code provided by your administrator.
                 </Text>
               </View>
             </View>
@@ -413,7 +659,9 @@ export default function SettingsScreen() {
         </View>
 
         {/* Sync Status */}
-        <Text className="text-sm font-semibold text-muted mb-2 ml-1">SYNC</Text>
+        <Text className="text-sm font-semibold text-muted mb-2 ml-1">
+          SYNC
+        </Text>
         <View className="bg-surface rounded-2xl border border-border mb-4 overflow-hidden">
           <SettingRow
             icon="cloud"
@@ -456,7 +704,9 @@ export default function SettingsScreen() {
         </View>
 
         {/* Notifications */}
-        <Text className="text-sm font-semibold text-muted mb-2 ml-1">NOTIFICATIONS</Text>
+        <Text className="text-sm font-semibold text-muted mb-2 ml-1">
+          NOTIFICATIONS
+        </Text>
         <View className="bg-surface rounded-2xl border border-border mb-4 overflow-hidden">
           <SettingRow
             icon="notifications"
@@ -472,7 +722,9 @@ export default function SettingsScreen() {
             activeOpacity={0.7}
           >
             <MaterialIcons
-              name={notifEnabled ? "notifications-off" : "notifications-active"}
+              name={
+                notifEnabled ? "notifications-off" : "notifications-active"
+              }
               size={20}
               color={colors.primary}
             />
@@ -493,7 +745,7 @@ export default function SettingsScreen() {
 
         {/* Version & Branding */}
         <Text className="text-xs text-muted text-center mt-6">
-          Driver v1.2.0
+          Driver v1.3.0
         </Text>
         <Text className="text-xs text-muted text-center mt-1">
           Powered by Agilasoft Cloud Technologies Inc.
@@ -548,11 +800,37 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     gap: 14,
     borderTopWidth: 0.5,
-    borderTopColor: "#E5E7EB",
+  },
+  scanQrBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    marginTop: 12,
+  },
+  scanQrText: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  orDivider: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  orLine: {
+    flex: 1,
+    height: 0.5,
+  },
+  orText: {
+    fontSize: 11,
+    fontWeight: "500",
   },
   fieldGroup: {
     gap: 6,
-    marginTop: 2,
   },
   fieldLabel: {
     fontSize: 12,
@@ -579,10 +857,24 @@ const styles = StyleSheet.create({
     padding: 4,
     marginLeft: 4,
   },
+  messageBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  messageText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "500",
+  },
   configActions: {
     flexDirection: "row",
     gap: 8,
-    marginTop: 4,
+    marginTop: 2,
   },
   configBtn: {
     flexDirection: "row",

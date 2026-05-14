@@ -113,12 +113,28 @@ function AppNavigator() {
                 headerShown: true,
               }}
             />
+            <Stack.Screen
+              name="config-scanner"
+              options={{
+                presentation: "modal",
+                headerShown: true,
+              }}
+            />
           </>
         ) : (
-          <Stack.Screen
-            name="login"
-            options={{ presentation: "fullScreenModal" }}
-          />
+          <>
+            <Stack.Screen
+              name="login"
+              options={{ presentation: "fullScreenModal" }}
+            />
+            <Stack.Screen
+              name="config-scanner"
+              options={{
+                presentation: "modal",
+                headerShown: true,
+              }}
+            />
+          </>
         )}
         <Stack.Screen name="oauth/callback" />
       </Stack>

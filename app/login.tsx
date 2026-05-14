@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,19 +9,38 @@ import {
   Platform,
   ScrollView,
   Alert,
+  StyleSheet,
 } from "react-native";
 import { Image } from "expo-image";
 import { ScreenContainer } from "@/components/screen-container";
 import { useAuth } from "@/lib/auth-context";
 import { useColors } from "@/hooks/use-colors";
+import { useRouter, useLocalSearchParams } from "expo-router";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
 export default function LoginScreen() {
   const { login } = useAuth();
   const colors = useColors();
+  const router = useRouter();
+  const params = useLocalSearchParams<{
+    scannedSiteUrl?: string;
+    scannedApiKey?: string;
+    scannedApiSecret?: string;
+  }>();
+
   const [siteUrl, setSiteUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [apiSecret, setApiSecret] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  // Handle scanned QR config params
+  useEffect(() => {
+    if (params.scannedSiteUrl && params.scannedApiKey && params.scannedApiSecret) {
+      setSiteUrl(params.scannedSiteUrl);
+      setApiKey(params.scannedApiKey);
+      setApiSecret(params.scannedApiSecret);
+    }
+  }, [params.scannedSiteUrl, params.scannedApiKey, params.scannedApiSecret]);
 
   const handleLogin = async () => {
     if (!siteUrl.trim() || !apiKey.trim() || !apiSecret.trim()) {
@@ -45,6 +64,13 @@ export default function LoginScreen() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleScanQR = () => {
+    router.push({
+      pathname: "/config-scanner",
+      params: { source: "login" },
+    });
   };
 
   return (
@@ -71,6 +97,30 @@ export default function LoginScreen() {
               <Text className="text-base text-muted mt-1">
                 CargoNext Logistics
               </Text>
+            </View>
+
+            {/* Scan QR Button */}
+            <TouchableOpacity
+              style={[
+                styles.scanQrBtn,
+                { borderColor: colors.primary, backgroundColor: colors.surface },
+              ]}
+              onPress={handleScanQR}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="qr-code-scanner" size={22} color={colors.primary} />
+              <Text style={[styles.scanQrText, { color: colors.primary }]}>
+                Scan QR Code to Configure
+              </Text>
+            </TouchableOpacity>
+
+            {/* Divider with "or" */}
+            <View style={styles.orDivider}>
+              <View style={[styles.orLine, { backgroundColor: colors.border }]} />
+              <Text style={[styles.orText, { color: colors.muted }]}>
+                or enter manually
+              </Text>
+              <View style={[styles.orLine, { backgroundColor: colors.border }]} />
             </View>
 
             {/* Form */}
@@ -152,3 +202,35 @@ export default function LoginScreen() {
     </ScreenContainer>
   );
 }
+
+const styles = StyleSheet.create({
+  scanQrBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    marginBottom: 16,
+  },
+  scanQrText: {
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  orDivider: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 16,
+  },
+  orLine: {
+    flex: 1,
+    height: 0.5,
+  },
+  orText: {
+    fontSize: 12,
+    fontWeight: "500",
+  },
+});
