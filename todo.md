@@ -30,3 +30,4 @@
 - [x] Run sheet status updates (In-Progress, Completed) from the app
 - [x] Fix: Server config save not working in Settings
 - [x] QR code scanning to configure server connection
+- [x] Downloadable PDF summary of completed run sheet with signatures, photos, timestamps, GPS data

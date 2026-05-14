@@ -24,6 +24,7 @@ import {
   applyLocalStatusChange,
 } from "@/lib/offline-store";
 import { updateRunSheetStatus } from "@/lib/frappe-api";
+import { generateAndSharePdf, printRunSheetPdf } from "@/lib/pdf-generator";
 
 export default function RunSheetDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -34,6 +35,7 @@ export default function RunSheetDetailScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   const loadData = useCallback(
     async (showRefresh = false) => {
@@ -191,6 +193,51 @@ export default function RunSheetDetailScreen() {
       facilityTo: leg.facility_to || "Drop-off",
     }));
   }, [bundle]);
+
+  const handleExportPdf = async () => {
+    if (!bundle) return;
+    setIsGeneratingPdf(true);
+    try {
+      Alert.alert(
+        "Export PDF",
+        "Choose an option:",
+        [
+          {
+            text: "Share PDF",
+            onPress: async () => {
+              try {
+                await generateAndSharePdf(bundle);
+              } catch (error: any) {
+                Alert.alert("Error", error.message || "Failed to generate PDF.");
+              } finally {
+                setIsGeneratingPdf(false);
+              }
+            },
+          },
+          {
+            text: "Print",
+            onPress: async () => {
+              try {
+                await printRunSheetPdf(bundle);
+              } catch (error: any) {
+                Alert.alert("Error", error.message || "Failed to print.");
+              } finally {
+                setIsGeneratingPdf(false);
+              }
+            },
+          },
+          {
+            text: "Cancel",
+            style: "cancel",
+            onPress: () => setIsGeneratingPdf(false),
+          },
+        ]
+      );
+    } catch (error: any) {
+      Alert.alert("Error", error.message || "Failed to generate PDF.");
+      setIsGeneratingPdf(false);
+    }
+  };
 
   const openRouteMap = () => {
     const points = mapLegPoints();
@@ -369,15 +416,34 @@ export default function RunSheetDetailScreen() {
             ) : null}
           </View>
 
-          {/* View Map Button */}
-          <TouchableOpacity
-            className="bg-primary rounded-xl py-2.5 mt-3 flex-row items-center justify-center gap-2"
-            onPress={openRouteMap}
-            activeOpacity={0.8}
-          >
-            <MaterialIcons name="map" size={18} color="#fff" />
-            <Text className="text-white text-sm font-semibold">View Route Map</Text>
-          </TouchableOpacity>
+          {/* Action Buttons Row */}
+          <View className="flex-row gap-2 mt-3">
+            <TouchableOpacity
+              className="flex-1 bg-primary rounded-xl py-2.5 flex-row items-center justify-center gap-2"
+              onPress={openRouteMap}
+              activeOpacity={0.8}
+            >
+              <MaterialIcons name="map" size={18} color="#fff" />
+              <Text className="text-white text-sm font-semibold">Route Map</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              className="flex-1 rounded-xl py-2.5 flex-row items-center justify-center gap-2"
+              style={{ backgroundColor: '#E67E22', opacity: isGeneratingPdf ? 0.6 : 1 }}
+              onPress={handleExportPdf}
+              activeOpacity={0.8}
+              disabled={isGeneratingPdf}
+            >
+              {isGeneratingPdf ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <MaterialIcons name="picture-as-pdf" size={18} color="#fff" />
+              )}
+              <Text className="text-white text-sm font-semibold">
+                {isGeneratingPdf ? 'Generating...' : 'Export PDF'}
+              </Text>
+            </TouchableOpacity>
+          </View>
 
           {/* Status Update Actions */}
           {renderStatusActions(doc.status)}
