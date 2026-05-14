@@ -6,6 +6,7 @@ import {
   Linking,
   TouchableOpacity,
   ScrollView,
+  StyleSheet,
 } from "react-native";
 import { useLocalSearchParams, Stack } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
@@ -24,8 +25,9 @@ interface LegPoint {
 }
 
 export default function RouteMapScreen() {
-  const params = useLocalSearchParams<{ legs: string; runSheetName: string }>();
+  const params = useLocalSearchParams<{ legs: string; runSheetName: string; title: string }>();
   const colors = useColors();
+  const screenTitle = params.runSheetName || params.title || "Route Map";
 
   const legs: LegPoint[] = useMemo(() => {
     try {
@@ -35,7 +37,6 @@ export default function RouteMapScreen() {
     }
   }, [params.legs]);
 
-  // Collect all valid coordinates
   const allCoords = useMemo(() => {
     const coords: { latitude: number; longitude: number }[] = [];
     legs.forEach((leg) => {
@@ -58,15 +59,17 @@ export default function RouteMapScreen() {
         longitudeDelta: 0.5,
       };
     }
-    const avgLat =
-      allCoords.reduce((s, c) => s + c.latitude, 0) / allCoords.length;
-    const avgLng =
-      allCoords.reduce((s, c) => s + c.longitude, 0) / allCoords.length;
+    const lats = allCoords.map((c) => c.latitude);
+    const lngs = allCoords.map((c) => c.longitude);
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs);
+    const maxLng = Math.max(...lngs);
     return {
-      latitude: avgLat,
-      longitude: avgLng,
-      latitudeDelta: 0.15,
-      longitudeDelta: 0.15,
+      latitude: (minLat + maxLat) / 2,
+      longitude: (minLng + maxLng) / 2,
+      latitudeDelta: Math.max((maxLat - minLat) * 1.5, 0.05),
+      longitudeDelta: Math.max((maxLng - minLng) * 1.5, 0.05),
     };
   }, [allCoords]);
 
@@ -82,132 +85,159 @@ export default function RouteMapScreen() {
     });
   };
 
-  // On web, show a coordinate list with links to Google Maps
-  if (Platform.OS === "web") {
-    return (
-      <>
-        <Stack.Screen
-          options={{
-            title: "Route Map",
-            headerBackTitle: "Back",
-            headerStyle: { backgroundColor: colors.background },
-            headerTintColor: colors.primary,
-            headerTitleStyle: { color: colors.foreground },
-          }}
-        />
-        <ScreenContainer edges={["left", "right"]} className="px-4 pt-4">
-          <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-            <Text className="text-lg font-bold text-foreground mb-2">
-              Route Locations
-            </Text>
-            <Text className="text-xs text-muted mb-4">
-              Map view is available on iOS and Android devices. Below are the GPS
-              coordinates for each leg.
-            </Text>
-            {legs.length === 0 ? (
-              <View className="flex-1 items-center justify-center py-20">
-                <MaterialIcons name="map" size={48} color={colors.border} />
-                <Text className="text-muted mt-3">
-                  No GPS coordinates recorded yet
-                </Text>
-              </View>
-            ) : (
-              legs.map((leg, i) => (
-                <View
-                  key={leg.name}
-                  className="bg-surface rounded-xl p-3 border border-border mb-3"
-                >
-                  <Text className="text-sm font-semibold text-foreground mb-2">
-                    Leg {i + 1}: {leg.name}
-                  </Text>
-                  {leg.pickLat && leg.pickLng ? (
-                    <TouchableOpacity
-                      onPress={() =>
-                        openInMaps(leg.pickLat, leg.pickLng, leg.facilityFrom)
-                      }
-                      activeOpacity={0.7}
-                    >
-                      <View className="flex-row items-center gap-2 mb-1">
-                        <MaterialIcons
-                          name="trip-origin"
-                          size={14}
-                          color={colors.success}
-                        />
-                        <Text className="text-xs text-primary">
-                          Pick: {leg.pickLat.toFixed(6)},{" "}
-                          {leg.pickLng.toFixed(6)}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  ) : (
-                    <View className="flex-row items-center gap-2 mb-1">
-                      <MaterialIcons
-                        name="trip-origin"
-                        size={14}
-                        color={colors.muted}
-                      />
-                      <Text className="text-xs text-muted">
-                        Pick: No GPS recorded
-                      </Text>
-                    </View>
-                  )}
-                  {leg.dropLat && leg.dropLng ? (
-                    <TouchableOpacity
-                      onPress={() =>
-                        openInMaps(leg.dropLat, leg.dropLng, leg.facilityTo)
-                      }
-                      activeOpacity={0.7}
-                    >
-                      <View className="flex-row items-center gap-2">
-                        <MaterialIcons
-                          name="place"
-                          size={14}
-                          color={colors.error}
-                        />
-                        <Text className="text-xs text-primary">
-                          Drop: {leg.dropLat.toFixed(6)},{" "}
-                          {leg.dropLng.toFixed(6)}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  ) : (
-                    <View className="flex-row items-center gap-2">
-                      <MaterialIcons
-                        name="place"
-                        size={14}
-                        color={colors.muted}
-                      />
-                      <Text className="text-xs text-muted">
-                        Drop: No GPS recorded
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              ))
-            )}
-          </ScrollView>
-        </ScreenContainer>
-      </>
-    );
-  }
+  const hasCoords = allCoords.length > 0;
 
-  // On native, show the interactive map
   return (
     <>
       <Stack.Screen
         options={{
-          title: params.runSheetName || "Route Map",
+          title: screenTitle,
           headerBackTitle: "Back",
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.primary,
           headerTitleStyle: { color: colors.foreground },
         }}
       />
-      <NativeMap
-        legs={legs}
-        initialRegion={initialRegion}
-        allCoords={allCoords}
-      />
+
+      {hasCoords ? (
+        <View style={styles.mapContainer}>
+          <NativeMap
+            legs={legs}
+            initialRegion={initialRegion}
+            allCoords={allCoords}
+          />
+
+          {/* Navigate buttons overlay at bottom */}
+          <View style={[styles.navOverlay, { backgroundColor: colors.surface }]}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.navScroll}>
+              {legs.map((leg, i) => (
+                <View key={leg.name} style={styles.navItem}>
+                  <View style={[styles.navBadge, { backgroundColor: colors.primary }]}>
+                    <Text style={styles.navBadgeText}>{i + 1}</Text>
+                  </View>
+                  <View style={styles.navButtons}>
+                    {leg.pickLat !== 0 && leg.pickLng !== 0 && (
+                      <TouchableOpacity
+                        onPress={() => openInMaps(leg.pickLat, leg.pickLng, leg.facilityFrom)}
+                        style={[styles.navBtn, { backgroundColor: "#22C55E" }]}
+                        activeOpacity={0.8}
+                      >
+                        <MaterialIcons name="navigation" size={14} color="#fff" />
+                        <Text style={styles.navBtnText} numberOfLines={1}>
+                          {leg.facilityFrom}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                    {leg.dropLat !== 0 && leg.dropLng !== 0 && (
+                      <TouchableOpacity
+                        onPress={() => openInMaps(leg.dropLat, leg.dropLng, leg.facilityTo)}
+                        style={[styles.navBtn, { backgroundColor: "#EF4444" }]}
+                        activeOpacity={0.8}
+                      >
+                        <MaterialIcons name="navigation" size={14} color="#fff" />
+                        <Text style={styles.navBtnText} numberOfLines={1}>
+                          {leg.facilityTo}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      ) : (
+        <ScreenContainer edges={["left", "right"]}>
+          <View style={styles.emptyContainer}>
+            <MaterialIcons name="location-off" size={48} color={colors.border} />
+            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+              No Coordinates Available
+            </Text>
+            <Text style={[styles.emptySubtitle, { color: colors.muted }]}>
+              Could not resolve leg addresses to map coordinates. Ensure addresses are set on the Transport Legs in Frappe.
+            </Text>
+          </View>
+        </ScreenContainer>
+      )}
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  mapContainer: {
+    flex: 1,
+  },
+  navOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingVertical: 10,
+    paddingBottom: 30,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  navScroll: {
+    paddingHorizontal: 12,
+    gap: 10,
+  },
+  navItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginRight: 10,
+  },
+  navBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  navBadgeText: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  navButtons: {
+    gap: 4,
+  },
+  navBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  navBtnText: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "600",
+    maxWidth: 80,
+  },
+  emptyContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 32,
+  },
+  emptyTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    marginTop: 12,
+    textAlign: "center",
+  },
+  emptySubtitle: {
+    fontSize: 13,
+    marginTop: 8,
+    textAlign: "center",
+    lineHeight: 20,
+    maxWidth: 300,
+  },
+});

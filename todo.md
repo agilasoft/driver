@@ -38,3 +38,4 @@
 - [x] Fix: Route map should geocode leg addresses automatically instead of requiring coordinates
 - [x] Update theme to CargoNext blue/orange branding (matching referenced app)
 - [x] Add search bar to run sheets list to filter by name, route, or reference number
+- [x] Fix: Route map and Map tab not working properly

@@ -97,7 +97,6 @@ export default function MapTabScreen() {
         }
         setAllSheets(sheets);
 
-        // Find the most recent active run sheet
         const active = sheets.find((s) => ACTIVE_STATUSES.includes(s.status));
         setActiveSheet(active || null);
 
@@ -114,7 +113,6 @@ export default function MapTabScreen() {
           }
           setBundle(bundleData);
 
-          // Geocode leg addresses
           if (bundleData) {
             await geocodeLegs(bundleData);
           }
@@ -146,7 +144,6 @@ export default function MapTabScreen() {
     loadData();
   }, [loadData]);
 
-  // Build leg points from resolved geocoded coordinates
   const legPoints: LegPoint[] = useMemo(() => {
     return resolvedLegs.map((leg) => ({
       name: leg.legName,
@@ -181,30 +178,17 @@ export default function MapTabScreen() {
         longitudeDelta: 0.5,
       };
     }
-    const avgLat =
-      allCoords.reduce((s, c) => s + c.latitude, 0) / allCoords.length;
-    const avgLng =
-      allCoords.reduce((s, c) => s + c.longitude, 0) / allCoords.length;
-
-    // Calculate delta to fit all points
-    const latitudes = allCoords.map((c) => c.latitude);
-    const longitudes = allCoords.map((c) => c.longitude);
-    const latDelta =
-      Math.max(
-        (Math.max(...latitudes) - Math.min(...latitudes)) * 1.5,
-        0.05
-      );
-    const lngDelta =
-      Math.max(
-        (Math.max(...longitudes) - Math.min(...longitudes)) * 1.5,
-        0.05
-      );
-
+    const lats = allCoords.map((c) => c.latitude);
+    const lngs = allCoords.map((c) => c.longitude);
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs);
+    const maxLng = Math.max(...lngs);
     return {
-      latitude: avgLat,
-      longitude: avgLng,
-      latitudeDelta: latDelta,
-      longitudeDelta: lngDelta,
+      latitude: (minLat + maxLat) / 2,
+      longitude: (minLng + maxLng) / 2,
+      latitudeDelta: Math.max((maxLat - minLat) * 1.5, 0.05),
+      longitudeDelta: Math.max((maxLng - minLng) * 1.5, 0.05),
     };
   }, [allCoords]);
 
@@ -259,12 +243,7 @@ export default function MapTabScreen() {
           }
         >
           <View style={styles.emptyContainer}>
-            <View
-              style={[
-                styles.emptyIconCircle,
-                { backgroundColor: colors.surface },
-              ]}
-            >
+            <View style={[styles.emptyIconCircle, { backgroundColor: colors.surface }]}>
               <MaterialIcons name="map" size={48} color={colors.border} />
             </View>
             <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
@@ -273,15 +252,15 @@ export default function MapTabScreen() {
             <Text style={[styles.emptySubtitle, { color: colors.muted }]}>
               {allSheets.length === 0
                 ? "No run sheets found. Pull down to refresh."
-                : "No run sheets with Dispatched or In-Progress status. Start a trip from the Run Sheets tab to see the route here."}
+                : "No run sheets with Dispatched or In-Progress status. Start a trip from the Run Sheets tab."}
             </Text>
             <TouchableOpacity
-              style={[styles.refreshBtn, { backgroundColor: colors.primary }]}
+              style={[styles.actionBtn, { backgroundColor: colors.primary }]}
               onPress={() => loadData(true)}
               activeOpacity={0.8}
             >
               <MaterialIcons name="refresh" size={20} color="#fff" />
-              <Text style={styles.refreshBtnText}>Refresh</Text>
+              <Text style={styles.actionBtnText}>Refresh</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -309,13 +288,41 @@ export default function MapTabScreen() {
 
   const hasMapData = allCoords.length > 0;
 
-  // Web fallback: show address-based coordinate list
-  if (Platform.OS === "web") {
-    return (
-      <ScreenContainer>
-        <ConnectivityBanner />
+  return (
+    <ScreenContainer>
+      <ConnectivityBanner />
+
+      {/* Active run sheet banner */}
+      <TouchableOpacity
+        style={[styles.activeBanner, { backgroundColor: colors.primary }]}
+        onPress={navigateToRunSheet}
+        activeOpacity={0.8}
+      >
+        <View style={styles.activeBannerContent}>
+          <MaterialIcons name="directions" size={22} color="#fff" />
+          <View style={styles.activeBannerText}>
+            <Text style={styles.activeBannerTitle} numberOfLines={1}>
+              {activeSheet.name}
+            </Text>
+            <Text style={styles.activeBannerSub} numberOfLines={1}>
+              {activeSheet.route_name || activeSheet.run_type} — {activeSheet.status} — {bundle.legs.length} leg{bundle.legs.length !== 1 ? "s" : ""}
+            </Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={24} color="#fff" />
+        </View>
+      </TouchableOpacity>
+
+      {hasMapData ? (
+        <View style={styles.mapContainer}>
+          <NativeMap
+            legs={legPoints}
+            initialRegion={initialRegion}
+            allCoords={allCoords}
+          />
+        </View>
+      ) : (
         <ScrollView
-          contentContainerStyle={{ paddingBottom: 40 }}
+          contentContainerStyle={{ flexGrow: 1 }}
           refreshControl={
             <RefreshControl
               refreshing={isRefreshing}
@@ -324,314 +331,49 @@ export default function MapTabScreen() {
             />
           }
         >
-          {/* Active run sheet banner */}
-          <TouchableOpacity
-            style={[styles.activeBanner, { backgroundColor: colors.primary }]}
-            onPress={navigateToRunSheet}
-            activeOpacity={0.8}
-          >
-            <View style={styles.activeBannerContent}>
-              <MaterialIcons name="directions" size={24} color="#fff" />
-              <View style={styles.activeBannerText}>
-                <Text style={styles.activeBannerTitle}>
-                  {activeSheet.name}
-                </Text>
-                <Text style={styles.activeBannerSub}>
-                  {activeSheet.route_name || activeSheet.run_type} —{" "}
-                  {activeSheet.status}
-                </Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={24} color="#fff" />
-            </View>
-          </TouchableOpacity>
-
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-              Route Locations
+          <View style={styles.emptyContainer}>
+            <MaterialIcons name="location-off" size={40} color={colors.border} />
+            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+              No Locations Found
             </Text>
-            <Text style={[styles.sectionSubtitle, { color: colors.muted }]}>
-              Coordinates resolved from leg addresses. Interactive map available
-              on iOS/Android.
-            </Text>
-          </View>
-
-          {!hasMapData ? (
-            <View style={styles.noDataContainer}>
-              <MaterialIcons name="location-off" size={40} color={colors.border} />
-              <Text style={[styles.noDataText, { color: colors.muted }]}>
-                Could not resolve addresses to coordinates. Check that leg
-                addresses are set correctly in the system.
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.legListContainer}>
-              {resolvedLegs.map((leg, i) => (
-                <View
-                  key={leg.legName}
-                  style={[
-                    styles.legCard,
-                    {
-                      backgroundColor: colors.surface,
-                      borderColor: colors.border,
-                    },
-                  ]}
-                >
-                  <View style={styles.legCardHeader}>
-                    <View
-                      style={[
-                        styles.legNumber,
-                        { backgroundColor: colors.primary },
-                      ]}
-                    >
-                      <Text style={styles.legNumberText}>{i + 1}</Text>
-                    </View>
-                    <Text
-                      style={[styles.legCardTitle, { color: colors.foreground }]}
-                      numberOfLines={1}
-                    >
-                      {leg.facilityFrom} → {leg.facilityTo}
-                    </Text>
-                  </View>
-
-                  {/* Pick location */}
-                  {leg.pickCoords ? (
-                    <TouchableOpacity
-                      onPress={() =>
-                        openInMaps(
-                          leg.pickCoords!.latitude,
-                          leg.pickCoords!.longitude,
-                          leg.facilityFrom
-                        )
-                      }
-                      style={styles.coordRow}
-                      activeOpacity={0.7}
-                    >
-                      <MaterialIcons
-                        name="trip-origin"
-                        size={16}
-                        color={colors.success}
-                      />
-                      <View style={styles.coordInfo}>
-                        <Text
-                          style={[styles.coordLabel, { color: colors.foreground }]}
-                        >
-                          {leg.facilityFrom}
-                        </Text>
-                        <Text
-                          style={[styles.coordText, { color: colors.muted }]}
-                        >
-                          {leg.pickCoords.latitude.toFixed(6)},{" "}
-                          {leg.pickCoords.longitude.toFixed(6)}
-                          {leg.pickCoords.source === "gps" ? " (GPS)" : ""}
-                        </Text>
-                      </View>
-                      <MaterialIcons
-                        name="open-in-new"
-                        size={14}
-                        color={colors.muted}
-                      />
-                    </TouchableOpacity>
-                  ) : (
-                    <View style={styles.coordRow}>
-                      <MaterialIcons
-                        name="trip-origin"
-                        size={16}
-                        color={colors.muted}
-                      />
-                      <View style={styles.coordInfo}>
-                        <Text
-                          style={[styles.coordLabel, { color: colors.muted }]}
-                        >
-                          {leg.facilityFrom}
-                        </Text>
-                        <Text
-                          style={[styles.coordText, { color: colors.muted }]}
-                        >
-                          Address not resolved
-                        </Text>
-                      </View>
-                    </View>
-                  )}
-
-                  {/* Drop location */}
-                  {leg.dropCoords ? (
-                    <TouchableOpacity
-                      onPress={() =>
-                        openInMaps(
-                          leg.dropCoords!.latitude,
-                          leg.dropCoords!.longitude,
-                          leg.facilityTo
-                        )
-                      }
-                      style={styles.coordRow}
-                      activeOpacity={0.7}
-                    >
-                      <MaterialIcons
-                        name="place"
-                        size={16}
-                        color={colors.error}
-                      />
-                      <View style={styles.coordInfo}>
-                        <Text
-                          style={[styles.coordLabel, { color: colors.foreground }]}
-                        >
-                          {leg.facilityTo}
-                        </Text>
-                        <Text
-                          style={[styles.coordText, { color: colors.muted }]}
-                        >
-                          {leg.dropCoords.latitude.toFixed(6)},{" "}
-                          {leg.dropCoords.longitude.toFixed(6)}
-                          {leg.dropCoords.source === "gps" ? " (GPS)" : ""}
-                        </Text>
-                      </View>
-                      <MaterialIcons
-                        name="open-in-new"
-                        size={14}
-                        color={colors.muted}
-                      />
-                    </TouchableOpacity>
-                  ) : (
-                    <View style={styles.coordRow}>
-                      <MaterialIcons
-                        name="place"
-                        size={16}
-                        color={colors.muted}
-                      />
-                      <View style={styles.coordInfo}>
-                        <Text
-                          style={[styles.coordLabel, { color: colors.muted }]}
-                        >
-                          {leg.facilityTo}
-                        </Text>
-                        <Text
-                          style={[styles.coordText, { color: colors.muted }]}
-                        >
-                          Address not resolved
-                        </Text>
-                      </View>
-                    </View>
-                  )}
-                </View>
-              ))}
-            </View>
-          )}
-        </ScrollView>
-      </ScreenContainer>
-    );
-  }
-
-  // Native: show interactive map with overlay
-  return (
-    <ScreenContainer edges={["left", "right"]}>
-      <ConnectivityBanner />
-      <View style={styles.mapContainer}>
-        {hasMapData ? (
-          <NativeMap
-            legs={legPoints}
-            initialRegion={initialRegion}
-            allCoords={allCoords}
-          />
-        ) : (
-          <View
-            style={[
-              styles.noGpsContainer,
-              { backgroundColor: colors.surface },
-            ]}
-          >
-            <MaterialIcons
-              name="location-off"
-              size={48}
-              color={colors.border}
-            />
-            <Text style={[styles.noGpsText, { color: colors.muted }]}>
-              Could not resolve leg addresses to coordinates.{"\n"}Ensure
-              addresses are set on the transport legs.
+            <Text style={[styles.emptySubtitle, { color: colors.muted }]}>
+              Could not resolve leg addresses to coordinates. Ensure addresses are set on the Transport Legs in Frappe.
             </Text>
             <TouchableOpacity
-              style={[styles.refreshBtn, { backgroundColor: colors.primary }]}
+              style={[styles.actionBtn, { backgroundColor: colors.primary }]}
               onPress={() => loadData(true)}
               activeOpacity={0.8}
             >
               <MaterialIcons name="refresh" size={20} color="#fff" />
-              <Text style={styles.refreshBtnText}>Retry</Text>
+              <Text style={styles.actionBtnText}>Retry</Text>
             </TouchableOpacity>
           </View>
-        )}
+        </ScrollView>
+      )}
 
-        {/* Active run sheet overlay card */}
-        <TouchableOpacity
-          style={[
-            styles.overlayCard,
-            {
-              backgroundColor: colors.background,
-              borderColor: colors.border,
-            },
-          ]}
-          onPress={navigateToRunSheet}
-          activeOpacity={0.8}
-        >
-          <View style={styles.overlayCardInner}>
-            <View
-              style={[
-                styles.overlayStatusDot,
-                {
-                  backgroundColor:
-                    activeSheet.status === "In-Progress"
-                      ? colors.warning
-                      : colors.primary,
-                },
-              ]}
-            />
-            <View style={styles.overlayCardText}>
-              <Text
-                style={[styles.overlayTitle, { color: colors.foreground }]}
-                numberOfLines={1}
-              >
-                {activeSheet.name}
-              </Text>
-              <Text
-                style={[styles.overlaySub, { color: colors.muted }]}
-                numberOfLines={1}
-              >
-                {activeSheet.route_name || activeSheet.run_type} —{" "}
-                {bundle.legs.length} leg{bundle.legs.length !== 1 ? "s" : ""} —{" "}
-                {activeSheet.status}
-              </Text>
-            </View>
-            <MaterialIcons
-              name="chevron-right"
-              size={24}
-              color={colors.muted}
-            />
-          </View>
-
-          {/* Leg progress indicators */}
-          <View style={styles.legProgressRow}>
-            {bundle.legs.map((leg) => {
-              const hasPickData = !!leg.pick_signature || !!leg.start_date;
-              const hasDropData = !!leg.drop_signature || !!leg.end_date;
-              const isComplete = hasPickData && hasDropData;
-              const isPartial = hasPickData || hasDropData;
-              return (
-                <View
-                  key={leg.name}
-                  style={[
-                    styles.legProgressDot,
-                    {
-                      backgroundColor: isComplete
-                        ? colors.success
-                        : isPartial
-                        ? colors.warning
-                        : colors.border,
-                    },
-                  ]}
-                />
-              );
-            })}
-          </View>
-        </TouchableOpacity>
-      </View>
+      {/* Bottom route summary */}
+      {hasMapData && (
+        <View style={[styles.routeSummary, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.routeScroll}>
+            {resolvedLegs.map((leg, i) => (
+              <View key={leg.legName} style={styles.routeStop}>
+                {i > 0 && (
+                  <MaterialIcons name="chevron-right" size={16} color={colors.muted} style={{ marginRight: 4 }} />
+                )}
+                <View style={[styles.stopDot, { backgroundColor: "#22C55E" }]} />
+                <Text style={[styles.stopText, { color: colors.foreground }]} numberOfLines={1}>
+                  {leg.facilityFrom}
+                </Text>
+                <MaterialIcons name="arrow-forward" size={12} color={colors.muted} style={{ marginHorizontal: 4 }} />
+                <View style={[styles.stopDot, { backgroundColor: "#EF4444" }]} />
+                <Text style={[styles.stopText, { color: colors.foreground }]} numberOfLines={1}>
+                  {leg.facilityTo}
+                </Text>
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      )}
     </ScreenContainer>
   );
 }
@@ -641,218 +383,109 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 32,
+    padding: 32,
   },
   loadingText: {
-    fontSize: 15,
     marginTop: 12,
+    fontSize: 14,
+    fontWeight: "500",
   },
   loadingSubtext: {
-    fontSize: 13,
     marginTop: 4,
-    textAlign: "center",
-  },
-  mapContainer: {
-    flex: 1,
+    fontSize: 12,
   },
   emptyContainer: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 32,
+    padding: 32,
   },
   emptyIconCircle: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     alignItems: "center",
     justifyContent: "center",
+    marginBottom: 16,
   },
   emptyTitle: {
     fontSize: 18,
     fontWeight: "700",
-    marginTop: 20,
+    marginTop: 8,
     textAlign: "center",
   },
   emptySubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     marginTop: 8,
     textAlign: "center",
     lineHeight: 20,
+    maxWidth: 300,
   },
-  refreshBtn: {
+  actionBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 14,
     marginTop: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 10,
   },
-  refreshBtnText: {
+  actionBtnText: {
     color: "#fff",
     fontSize: 15,
-    fontWeight: "600",
+    fontWeight: "700",
   },
   activeBanner: {
-    marginHorizontal: 16,
-    marginTop: 16,
-    borderRadius: 16,
+    marginHorizontal: 12,
+    marginTop: 8,
+    marginBottom: 4,
+    borderRadius: 12,
     overflow: "hidden",
   },
   activeBannerContent: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 10,
   },
   activeBannerText: {
     flex: 1,
   },
   activeBannerTitle: {
     color: "#fff",
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "700",
   },
   activeBannerSub: {
-    color: "rgba(255,255,255,0.8)",
-    fontSize: 13,
-    marginTop: 2,
-  },
-  sectionHeader: {
-    paddingHorizontal: 16,
-    paddingTop: 20,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: 4,
-  },
-  sectionSubtitle: {
-    fontSize: 13,
-    marginBottom: 16,
-    lineHeight: 18,
-  },
-  noDataContainer: {
-    alignItems: "center",
-    paddingVertical: 48,
-    paddingHorizontal: 32,
-  },
-  noDataText: {
-    fontSize: 14,
-    textAlign: "center",
-    marginTop: 12,
-    lineHeight: 20,
-  },
-  legListContainer: {
-    paddingHorizontal: 16,
-  },
-  legCard: {
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    marginBottom: 12,
-    gap: 12,
-  },
-  legCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  legNumber: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  legNumberText: {
-    color: "#fff",
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  legCardTitle: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  coordRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingLeft: 4,
-    paddingVertical: 4,
-  },
-  coordInfo: {
-    flex: 1,
-  },
-  coordLabel: {
-    fontSize: 13,
-    fontWeight: "500",
-  },
-  coordText: {
-    fontSize: 12,
-    marginTop: 1,
-  },
-  noGpsContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 32,
-  },
-  noGpsText: {
-    fontSize: 14,
-    textAlign: "center",
-    marginTop: 12,
-    lineHeight: 20,
-  },
-  overlayCard: {
-    position: "absolute",
-    bottom: 24,
-    left: 16,
-    right: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  overlayCardInner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  overlayStatusDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-  },
-  overlayCardText: {
-    flex: 1,
-  },
-  overlayTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  overlaySub: {
+    color: "rgba(255,255,255,0.85)",
     fontSize: 12,
     marginTop: 2,
   },
-  legProgressRow: {
-    flexDirection: "row",
-    gap: 4,
-    marginTop: 12,
-    paddingTop: 12,
+  mapContainer: {
+    flex: 1,
+  },
+  routeSummary: {
     borderTopWidth: 0.5,
-    borderTopColor: "rgba(0,0,0,0.1)",
+    paddingVertical: 10,
   },
-  legProgressDot: {
-    flex: 1,
-    height: 4,
-    borderRadius: 2,
+  routeScroll: {
+    paddingHorizontal: 16,
+    alignItems: "center",
+  },
+  routeStop: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  stopDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 4,
+  },
+  stopText: {
+    fontSize: 12,
+    fontWeight: "500",
+    maxWidth: 100,
   },
 });
