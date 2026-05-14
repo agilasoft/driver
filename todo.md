@@ -36,3 +36,5 @@
 - [x] Make app more mobile-friendly (larger touch targets, better spacing, improved readability)
 - [x] Add Map tab showing current active run sheet route
 - [x] Fix: Route map should geocode leg addresses automatically instead of requiring coordinates
+- [x] Update theme to CargoNext blue/orange branding (matching referenced app)
+- [x] Add search bar to run sheets list to filter by name, route, or reference number

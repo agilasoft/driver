@@ -6,7 +6,9 @@ import {
   RefreshControl,
   TouchableOpacity,
   ActivityIndicator,
+  TextInput,
   StyleSheet,
+  Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
@@ -48,6 +50,7 @@ export default function RunSheetsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const loadData = useCallback(
     async (showRefresh = false) => {
@@ -77,20 +80,44 @@ export default function RunSheetsScreen() {
     loadData();
   }, [loadData]);
 
-  // Apply client-side date filter
+  // Apply client-side date filter and search
   const filteredSheets = useMemo(() => {
-    if (dateFilter === "all") return sheets;
-    const cutoff = dateFilter === "today" ? getStartOfDay() : getStartOfWeek();
-    return sheets.filter((s) => {
-      if (!s.run_date) return false;
-      try {
-        const runDate = new Date(s.run_date);
-        return runDate >= cutoff;
-      } catch {
-        return false;
-      }
-    });
-  }, [sheets, dateFilter]);
+    let result = sheets;
+
+    // Date filter
+    if (dateFilter !== "all") {
+      const cutoff = dateFilter === "today" ? getStartOfDay() : getStartOfWeek();
+      result = result.filter((s) => {
+        if (!s.run_date) return false;
+        try {
+          const runDate = new Date(s.run_date);
+          return runDate >= cutoff;
+        } catch {
+          return false;
+        }
+      });
+    }
+
+    // Search filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      result = result.filter((s) => {
+        const searchable = [
+          s.name,
+          s.route_name,
+          s.vehicle,
+          s.run_type,
+          s.status,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return searchable.includes(q);
+      });
+    }
+
+    return result;
+  }, [sheets, dateFilter, searchQuery]);
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "—";
@@ -99,16 +126,30 @@ export default function RunSheetsScreen() {
       return d.toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
-        year: "numeric",
       });
     } catch {
       return dateStr;
     }
   };
 
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "Dispatched":
+        return colors.primary;
+      case "In-Progress":
+        return colors.warning;
+      case "Completed":
+        return colors.success;
+      default:
+        return colors.muted;
+    }
+  };
+
   const renderItem = ({ item }: { item: RunSheet }) => {
     const isActive =
       item.status === "Dispatched" || item.status === "In-Progress";
+    const statusColor = getStatusColor(item.status);
+
     return (
       <TouchableOpacity
         onPress={() =>
@@ -122,21 +163,30 @@ export default function RunSheetsScreen() {
           styles.card,
           {
             backgroundColor: colors.surface,
-            borderColor: isActive ? colors.primary : colors.border,
-            borderWidth: isActive ? 1.5 : 1,
+            borderLeftColor: statusColor,
+            borderLeftWidth: 4,
+            ...Platform.select({
+              ios: {
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.06,
+                shadowRadius: 8,
+              },
+              android: { elevation: 2 },
+            }),
           },
         ]}
       >
-        {/* Header row */}
-        <View style={styles.cardHeader}>
-          <View style={styles.cardHeaderLeft}>
+        {/* Top row: ID + Status */}
+        <View style={styles.cardTopRow}>
+          <View style={styles.cardIdContainer}>
             {isActive && (
               <View
-                style={[styles.activeDot, { backgroundColor: colors.primary }]}
+                style={[styles.activePulse, { backgroundColor: statusColor }]}
               />
             )}
             <Text
-              style={[styles.cardTitle, { color: colors.foreground }]}
+              style={[styles.cardId, { color: colors.foreground }]}
               numberOfLines={1}
             >
               {item.name}
@@ -155,43 +205,41 @@ export default function RunSheetsScreen() {
           </Text>
         ) : null}
 
-        {/* Info chips row */}
-        <View style={styles.infoRow}>
-          <View style={[styles.infoChip, { backgroundColor: colors.background }]}>
-            <MaterialIcons name="event" size={14} color={colors.muted} />
-            <Text style={[styles.infoChipText, { color: colors.muted }]}>
+        {/* Bottom info row */}
+        <View style={styles.cardInfoRow}>
+          <View style={styles.infoItem}>
+            <MaterialIcons name="event" size={15} color={colors.muted} />
+            <Text style={[styles.infoText, { color: colors.muted }]}>
               {formatDate(item.run_date)}
             </Text>
           </View>
           {item.vehicle ? (
-            <View
-              style={[styles.infoChip, { backgroundColor: colors.background }]}
-            >
+            <View style={styles.infoItem}>
               <MaterialIcons
                 name="local-shipping"
-                size={14}
+                size={15}
                 color={colors.muted}
               />
-              <Text style={[styles.infoChipText, { color: colors.muted }]}>
+              <Text style={[styles.infoText, { color: colors.muted }]}>
                 {item.vehicle}
               </Text>
             </View>
           ) : null}
           {item.run_type ? (
-            <View
-              style={[styles.infoChip, { backgroundColor: colors.background }]}
-            >
-              <MaterialIcons name="label" size={14} color={colors.muted} />
-              <Text style={[styles.infoChipText, { color: colors.muted }]}>
+            <View style={styles.infoItem}>
+              <MaterialIcons name="label" size={15} color={colors.muted} />
+              <Text style={[styles.infoText, { color: colors.muted }]}>
                 {item.run_type}
               </Text>
             </View>
           ) : null}
-        </View>
-
-        {/* Chevron */}
-        <View style={styles.chevron}>
-          <MaterialIcons name="chevron-right" size={22} color={colors.border} />
+          <View style={styles.cardArrow}>
+            <MaterialIcons
+              name="chevron-right"
+              size={22}
+              color={colors.border}
+            />
+          </View>
         </View>
       </TouchableOpacity>
     );
@@ -204,86 +252,123 @@ export default function RunSheetsScreen() {
         <View
           style={[styles.emptyIconCircle, { backgroundColor: colors.surface }]}
         >
-          <MaterialIcons name="description" size={44} color={colors.border} />
+          <MaterialIcons name="description" size={48} color={colors.border} />
         </View>
         <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-          No Run Sheets
+          No Run Sheets Found
         </Text>
         <Text style={[styles.emptySubtitle, { color: colors.muted }]}>
-          {dateFilter !== "all"
+          {searchQuery
+            ? `No results for "${searchQuery}"`
+            : dateFilter !== "all"
             ? "Try selecting a different date range"
             : auth?.driverId
-            ? "No run sheets assigned to you"
+            ? "No run sheets assigned to you yet"
             : "Pull down to refresh"}
         </Text>
       </View>
     );
   };
 
-  const filterOptions: { key: DateFilter; label: string; icon: string }[] = [
-    { key: "today", label: "Today", icon: "today" },
-    { key: "week", label: "This Week", icon: "date-range" },
-    { key: "all", label: "All", icon: "list" },
+  const filterOptions: { key: DateFilter; label: string }[] = [
+    { key: "today", label: "Today" },
+    { key: "week", label: "This Week" },
+    { key: "all", label: "All" },
   ];
 
   return (
     <ScreenContainer>
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-          Run Sheets
-        </Text>
-        {auth?.driverName ? (
-          <Text style={[styles.headerSubtitle, { color: colors.muted }]}>
-            {auth.driverName}
-          </Text>
-        ) : auth?.fullName ? (
-          <Text style={[styles.headerSubtitle, { color: colors.muted }]}>
-            {auth.fullName}
-          </Text>
-        ) : null}
-      </View>
+      <View style={[styles.header, { borderBottomColor: colors.border }]}>
+        <View style={styles.headerTop}>
+          <View>
+            <Text style={[styles.headerTitle, { color: colors.foreground }]}>
+              Run Sheets
+            </Text>
+            {auth?.driverName ? (
+              <Text style={[styles.headerSubtitle, { color: colors.muted }]}>
+                {auth.driverName}
+              </Text>
+            ) : auth?.fullName ? (
+              <Text style={[styles.headerSubtitle, { color: colors.muted }]}>
+                {auth.fullName}
+              </Text>
+            ) : null}
+          </View>
+          {!isOnline && (
+            <View style={[styles.offlineBadge, { backgroundColor: colors.warning }]}>
+              <MaterialIcons name="cloud-off" size={14} color="#fff" />
+              <Text style={styles.offlineBadgeText}>Offline</Text>
+            </View>
+          )}
+        </View>
 
-      {/* Date Filter Chips */}
-      <View style={styles.filterRow}>
-        {filterOptions.map((opt) => {
-          const isSelected = dateFilter === opt.key;
-          return (
+        {/* Search Bar */}
+        <View
+          style={[
+            styles.searchBar,
+            {
+              backgroundColor: colors.background,
+              borderColor: colors.border,
+            },
+          ]}
+        >
+          <MaterialIcons name="search" size={20} color={colors.muted} />
+          <TextInput
+            style={[styles.searchInput, { color: colors.foreground }]}
+            placeholder="Search by name, route, vehicle..."
+            placeholderTextColor={colors.muted}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            returnKeyType="search"
+            clearButtonMode="while-editing"
+          />
+          {searchQuery.length > 0 && Platform.OS !== "ios" && (
             <TouchableOpacity
-              key={opt.key}
-              onPress={() => setDateFilter(opt.key)}
-              activeOpacity={0.7}
-              style={[
-                styles.filterChip,
-                {
-                  borderColor: isSelected ? colors.primary : colors.border,
-                  backgroundColor: isSelected ? colors.primary : colors.surface,
-                },
-              ]}
+              onPress={() => setSearchQuery("")}
+              style={styles.clearButton}
             >
-              <MaterialIcons
-                name={opt.icon as any}
-                size={16}
-                color={isSelected ? "#fff" : colors.muted}
-              />
-              <Text
+              <MaterialIcons name="close" size={18} color={colors.muted} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Date Filter Pills */}
+        <View style={styles.filterRow}>
+          {filterOptions.map((opt) => {
+            const isSelected = dateFilter === opt.key;
+            return (
+              <TouchableOpacity
+                key={opt.key}
+                onPress={() => setDateFilter(opt.key)}
+                activeOpacity={0.7}
                 style={[
-                  styles.filterChipText,
-                  { color: isSelected ? "#fff" : colors.muted },
+                  styles.filterPill,
+                  {
+                    backgroundColor: isSelected
+                      ? colors.primary
+                      : "transparent",
+                    borderColor: isSelected ? colors.primary : colors.border,
+                  },
                 ]}
               >
-                {opt.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-        {dateFilter !== "all" ? (
-          <View style={styles.filterCount}>
+                <Text
+                  style={[
+                    styles.filterPillText,
+                    { color: isSelected ? "#fff" : colors.muted },
+                  ]}
+                >
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+          <View style={styles.filterCountContainer}>
             <Text style={[styles.filterCountText, { color: colors.muted }]}>
-              {filteredSheets.length}/{sheets.length}
+              {filteredSheets.length} {filteredSheets.length === 1 ? "sheet" : "sheets"}
             </Text>
           </View>
-        ) : null}
+        </View>
       </View>
 
       <ConnectivityBanner />
@@ -302,8 +387,8 @@ export default function RunSheetsScreen() {
           renderItem={renderItem}
           ListEmptyComponent={renderEmpty}
           contentContainerStyle={{
-            paddingTop: 8,
-            paddingBottom: 24,
+            paddingTop: 12,
+            paddingBottom: 32,
             flexGrow: filteredSheets.length === 0 ? 1 : undefined,
           }}
           refreshControl={
@@ -313,6 +398,7 @@ export default function RunSheetsScreen() {
               tintColor={colors.primary}
             />
           }
+          showsVerticalScrollIndicator={false}
         />
       )}
     </ScreenContainer>
@@ -323,10 +409,17 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 20,
     paddingTop: 8,
-    paddingBottom: 6,
+    paddingBottom: 14,
+    borderBottomWidth: 0.5,
+  },
+  headerTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 14,
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: "800",
     letterSpacing: -0.5,
   },
@@ -334,27 +427,53 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 2,
   },
+  offlineBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  offlineBadgeText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    height: 48,
+    marginBottom: 12,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    marginLeft: 10,
+    paddingVertical: 0,
+  },
+  clearButton: {
+    padding: 4,
+  },
   filterRow: {
     flexDirection: "row",
+    alignItems: "center",
     gap: 8,
-    paddingHorizontal: 20,
-    paddingBottom: 12,
-    alignItems: "center",
   },
-  filterChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
+  filterPill: {
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 22,
+    paddingVertical: 8,
+    borderRadius: 20,
     borderWidth: 1,
   },
-  filterChipText: {
+  filterPillText: {
     fontSize: 13,
     fontWeight: "600",
   },
-  filterCount: {
+  filterCountContainer: {
     flex: 1,
     alignItems: "flex-end",
   },
@@ -363,31 +482,31 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   card: {
-    borderRadius: 16,
+    borderRadius: 14,
     padding: 16,
     marginHorizontal: 16,
     marginBottom: 10,
   },
-  cardHeader: {
+  cardTopRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 6,
-    paddingRight: 24,
+    marginBottom: 4,
   },
-  cardHeaderLeft: {
+  cardIdContainer: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     flex: 1,
+    paddingRight: 8,
   },
-  activeDot: {
+  activePulse: {
     width: 8,
     height: 8,
     borderRadius: 4,
   },
-  cardTitle: {
-    fontSize: 16,
+  cardId: {
+    fontSize: 15,
     fontWeight: "700",
     flex: 1,
   },
@@ -395,30 +514,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "500",
     marginBottom: 10,
+    marginTop: 2,
   },
-  infoRow: {
+  cardInfoRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 6,
+    alignItems: "center",
+    gap: 12,
   },
-  infoChip: {
+  infoItem: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
   },
-  infoChipText: {
+  infoText: {
     fontSize: 12,
     fontWeight: "500",
   },
-  chevron: {
-    position: "absolute",
-    right: 14,
-    top: 0,
-    bottom: 0,
-    justifyContent: "center",
+  cardArrow: {
+    marginLeft: "auto",
   },
   emptyContainer: {
     flex: 1,
@@ -428,9 +542,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   emptyIconCircle: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    width: 96,
+    height: 96,
+    borderRadius: 48,
     alignItems: "center",
     justifyContent: "center",
   },
