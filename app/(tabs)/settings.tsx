@@ -23,6 +23,7 @@ import {
 } from "@/lib/notifications";
 import { checkBiometricAvailability } from "@/lib/profile-manager";
 import { useThemeContext, type ThemePreference } from "@/lib/theme-provider";
+import { useSessionTimeout, TIMEOUT_OPTIONS } from "@/lib/session-timeout";
 import { LinearGradient } from "expo-linear-gradient";
 
 const BLUE = "#3478C6";
@@ -45,6 +46,7 @@ export default function SettingsScreen() {
   const { isOnline, pendingCount, isSyncing, lastSync, syncNow } = useSync();
   const router = useRouter();
   const { themePreference, setThemePreference, colorScheme } = useThemeContext();
+  const { timeoutMinutes, setTimeoutMinutes } = useSessionTimeout();
   const params = useLocalSearchParams<{
     scannedSiteUrl?: string;
     scannedApiKey?: string;
@@ -616,6 +618,45 @@ export default function SettingsScreen() {
           <ThemeOption label="Dark Mode" icon="dark-mode" selected={themePreference === "dark"} onPress={() => setThemePreference("dark")} />
         </View>
 
+        {/* Session Timeout */}
+        <Text style={st.sectionLabel}>SESSION TIMEOUT</Text>
+        <View style={[st.card, { padding: 0, overflow: "hidden" }]}>
+          <View style={st.timeoutHeader}>
+            <MaterialIcons name="timer" size={22} color={BLUE} />
+            <View style={{ flex: 1 }}>
+              <Text style={st.timeoutTitle}>Auto-Lock</Text>
+              <Text style={st.timeoutDesc}>
+                {timeoutMinutes === 0
+                  ? "Disabled — profile stays unlocked"
+                  : `Lock after ${timeoutMinutes} min of inactivity`}
+              </Text>
+            </View>
+          </View>
+          <View style={st.rowDivider} />
+          {TIMEOUT_OPTIONS.map((opt, idx) => (
+            <React.Fragment key={opt.value}>
+              {idx > 0 && <View style={st.rowDivider} />}
+              <TouchableOpacity
+                style={st.timeoutRow}
+                onPress={() => setTimeoutMinutes(opt.value)}
+                activeOpacity={0.7}
+              >
+                <Text style={[
+                  st.timeoutLabel,
+                  { color: timeoutMinutes === opt.value ? BLUE : FG },
+                ]}>
+                  {opt.label}
+                </Text>
+                {timeoutMinutes === opt.value ? (
+                  <MaterialIcons name="check-circle" size={22} color={BLUE} />
+                ) : (
+                  <MaterialIcons name="radio-button-unchecked" size={22} color={BORDER} />
+                )}
+              </TouchableOpacity>
+            </React.Fragment>
+          ))}
+        </View>
+
         {/* Notifications */}
         <Text style={st.sectionLabel}>NOTIFICATIONS</Text>
         <View style={[st.card, { padding: 0, overflow: "hidden" }]}>
@@ -811,6 +852,13 @@ const st = StyleSheet.create({
   // Theme rows
   themeRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, paddingVertical: 16 },
   themeLabel: { fontSize: 15, fontWeight: "600", flex: 1 },
+
+  // Session timeout
+  timeoutHeader: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 20, paddingVertical: 18 },
+  timeoutTitle: { fontSize: 15, fontWeight: "600", color: FG },
+  timeoutDesc: { fontSize: 12, marginTop: 2, color: GRAY },
+  timeoutRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingVertical: 14 },
+  timeoutLabel: { fontSize: 15, fontWeight: "600" },
   version: { fontSize: 13, textAlign: "center", marginTop: 12, color: GRAY },
   brand: { fontSize: 12, textAlign: "center", marginTop: 4, color: GRAY },
 });

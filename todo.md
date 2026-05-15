@@ -67,3 +67,6 @@
 - [x] Remove old login-first flow; profiles are the entry point
 - [x] Fix: Web preview shows Run Sheets tab instead of profile picker on startup
 - [x] Update app icon with CargoNext blue (#3478C6) background
+- [x] Profile edit screen: edit server URL, API key, API secret, PIN, biometric without re-creating
+- [x] Swipe-to-delete profiles on profile picker screen
+- [x] Session timeout: auto-lock active profile after configurable idle period

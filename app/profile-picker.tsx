@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,9 @@ import {
   Platform,
   Pressable,
   TouchableOpacity,
+  Animated,
+  LayoutAnimation,
+  UIManager,
 } from "react-native";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
@@ -24,6 +27,11 @@ import {
   authenticateWithBiometric,
 } from "@/lib/profile-manager";
 
+// Enable LayoutAnimation on Android
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
 const BLUE = "#3478C6";
 const BLUE_LIGHT = "#5B9BD5";
 const ORANGE = "#F27A2E";
@@ -31,6 +39,165 @@ const FG = "#1A1A1A";
 const GRAY = "#8E8E93";
 const BORDER = "#E5E5EA";
 const SURFACE = "#F5F5F7";
+const DELETE_RED = "#FF3B30";
+
+// Swipeable profile card component
+function SwipeableProfileCard({
+  item,
+  onTap,
+  onEdit,
+  onDelete,
+}: {
+  item: DriverProfile;
+  onTap: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const translateX = useRef(new Animated.Value(0)).current;
+  const isSwiped = useRef(false);
+  const startX = useRef(0);
+  const currentX = useRef(0);
+  const ACTION_WIDTH = 140; // width for both edit + delete buttons
+
+  const getInitials = (name: string) =>
+    (name || "?").split(" ").map((w) => w[0]).join("").toUpperCase().substring(0, 2);
+
+  const getHostname = (url: string) => {
+    try { return new URL(url).hostname; } catch { return url; }
+  };
+
+  const initials = getInitials(item.fullName || item.userName || "?");
+  const hostname = getHostname(item.siteUrl);
+  const hasLock = !!item.pin || item.useBiometric;
+
+  const resetSwipe = useCallback(() => {
+    Animated.spring(translateX, {
+      toValue: 0,
+      useNativeDriver: true,
+      tension: 60,
+      friction: 10,
+    }).start();
+    isSwiped.current = false;
+  }, [translateX]);
+
+  const openSwipe = useCallback(() => {
+    Animated.spring(translateX, {
+      toValue: -ACTION_WIDTH,
+      useNativeDriver: true,
+      tension: 60,
+      friction: 10,
+    }).start();
+    isSwiped.current = true;
+  }, [translateX]);
+
+  const handleTouchStart = useCallback((e: any) => {
+    startX.current = e.nativeEvent.pageX;
+    currentX.current = isSwiped.current ? -ACTION_WIDTH : 0;
+  }, []);
+
+  const handleTouchMove = useCallback((e: any) => {
+    const dx = e.nativeEvent.pageX - startX.current;
+    const newX = Math.min(0, Math.max(-ACTION_WIDTH - 20, currentX.current + dx));
+    translateX.setValue(newX);
+  }, [translateX]);
+
+  const handleTouchEnd = useCallback((e: any) => {
+    const dx = e.nativeEvent.pageX - startX.current;
+    const finalX = currentX.current + dx;
+
+    // If barely moved, treat as tap
+    if (Math.abs(dx) < 10) {
+      if (isSwiped.current) {
+        resetSwipe();
+      } else {
+        onTap();
+      }
+      return;
+    }
+
+    // Determine if we should open or close
+    if (finalX < -ACTION_WIDTH / 2) {
+      openSwipe();
+    } else {
+      resetSwipe();
+    }
+  }, [resetSwipe, openSwipe, onTap]);
+
+  return (
+    <View style={st.swipeContainer}>
+      {/* Background action buttons */}
+      <View style={st.actionsContainer}>
+        <TouchableOpacity
+          style={st.editAction}
+          onPress={() => {
+            resetSwipe();
+            onEdit();
+          }}
+          activeOpacity={0.8}
+        >
+          <MaterialIcons name="edit" size={20} color="#fff" />
+          <Text style={st.actionText}>Edit</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={st.deleteAction}
+          onPress={() => {
+            resetSwipe();
+            onDelete();
+          }}
+          activeOpacity={0.8}
+        >
+          <MaterialIcons name="delete" size={20} color="#fff" />
+          <Text style={st.actionText}>Delete</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Foreground card */}
+      <Animated.View
+        style={[
+          st.profileCard,
+          { transform: [{ translateX }] },
+        ]}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        {/* Avatar */}
+        <View style={[st.avatar, { backgroundColor: item.avatarColor }]}>
+          <Text style={st.avatarText}>{initials}</Text>
+        </View>
+
+        {/* Profile Info */}
+        <View style={st.profileInfo}>
+          <Text style={st.profileName} numberOfLines={1}>
+            {item.fullName || item.userName || "Unknown User"}
+          </Text>
+          <View style={st.hostRow}>
+            <MaterialIcons name="dns" size={13} color={GRAY} />
+            <Text style={st.profileHost} numberOfLines={1}>{hostname}</Text>
+          </View>
+          {item.driverName ? (
+            <View style={st.driverRow}>
+              <MaterialIcons name="local-shipping" size={13} color={BLUE} />
+              <Text style={st.profileDriver} numberOfLines={1}>{item.driverName}</Text>
+            </View>
+          ) : null}
+        </View>
+
+        {/* Security indicator */}
+        {hasLock ? (
+          <View style={st.lockBadge}>
+            <MaterialIcons
+              name={item.useBiometric ? "fingerprint" : "lock"}
+              size={16}
+              color={BLUE}
+            />
+          </View>
+        ) : null}
+        <MaterialIcons name="chevron-right" size={22} color="#C7C7CC" />
+      </Animated.View>
+    </View>
+  );
+}
 
 export default function ProfilePickerScreen() {
   const router = useRouter();
@@ -80,7 +247,6 @@ export default function ProfilePickerScreen() {
             return;
           }
           setIsAuthenticating(false);
-          // Fall through to PIN if biometric fails and PIN is set
           if (!profile.pin) {
             Alert.alert("Authentication Failed", "Biometric authentication failed. Please try again.");
             return;
@@ -122,6 +288,13 @@ export default function ProfilePickerScreen() {
     router.push("/login");
   }, [router]);
 
+  const handleEditProfile = useCallback(
+    (profile: DriverProfile) => {
+      router.push({ pathname: "/edit-profile", params: { profileId: profile.id } });
+    },
+    [router]
+  );
+
   const handleDeleteProfile = useCallback(
     (profile: DriverProfile) => {
       Alert.alert(
@@ -133,6 +306,7 @@ export default function ProfilePickerScreen() {
             text: "Delete",
             style: "destructive",
             onPress: async () => {
+              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
               await removeProfile(profile.id);
             },
           },
@@ -142,72 +316,23 @@ export default function ProfilePickerScreen() {
     [removeProfile]
   );
 
-  const getHostname = (url: string) => {
-    try { return new URL(url).hostname; } catch { return url; }
-  };
-
-  const getInitials = (name: string) =>
-    (name || "?").split(" ").map((w) => w[0]).join("").toUpperCase().substring(0, 2);
-
   const renderProfile = useCallback(
-    ({ item }: { item: DriverProfile }) => {
-      const initials = getInitials(item.fullName || item.userName || "?");
-      const hostname = getHostname(item.siteUrl);
-      const hasLock = !!item.pin || item.useBiometric;
-
-      return (
-        <Pressable
-          onPress={() => handleProfileTap(item)}
-          onLongPress={() => handleDeleteProfile(item)}
-          style={({ pressed }) => [
-            st.profileCard,
-            {
-              opacity: pressed ? 0.85 : 1,
-              transform: [{ scale: pressed ? 0.98 : 1 }],
-            },
-          ]}
-        >
-          {/* Avatar */}
-          <View style={[st.avatar, { backgroundColor: item.avatarColor }]}>
-            <Text style={st.avatarText}>{initials}</Text>
-          </View>
-
-          {/* Profile Info */}
-          <View style={st.profileInfo}>
-            <Text style={st.profileName} numberOfLines={1}>
-              {item.fullName || item.userName || "Unknown User"}
-            </Text>
-            <View style={st.hostRow}>
-              <MaterialIcons name="dns" size={13} color={GRAY} />
-              <Text style={st.profileHost} numberOfLines={1}>{hostname}</Text>
-            </View>
-            {item.driverName ? (
-              <View style={st.driverRow}>
-                <MaterialIcons name="local-shipping" size={13} color={BLUE} />
-                <Text style={st.profileDriver} numberOfLines={1}>{item.driverName}</Text>
-              </View>
-            ) : null}
-          </View>
-
-          {/* Security indicator */}
-          {hasLock ? (
-            <View style={st.lockBadge}>
-              <MaterialIcons
-                name={item.useBiometric ? "fingerprint" : "lock"}
-                size={16}
-                color={BLUE}
-              />
-            </View>
-          ) : null}
-          <MaterialIcons name="chevron-right" size={22} color="#C7C7CC" />
-        </Pressable>
-      );
-    },
-    [handleProfileTap, handleDeleteProfile]
+    ({ item }: { item: DriverProfile }) => (
+      <SwipeableProfileCard
+        item={item}
+        onTap={() => handleProfileTap(item)}
+        onEdit={() => handleEditProfile(item)}
+        onDelete={() => handleDeleteProfile(item)}
+      />
+    ),
+    [handleProfileTap, handleEditProfile, handleDeleteProfile]
   );
 
   // PIN entry overlay
   if (unlockingProfile) {
+    const getInitials = (name: string) =>
+      (name || "?").split(" ").map((w) => w[0]).join("").toUpperCase().substring(0, 2);
+
     return (
       <ScreenContainer edges={["top", "bottom", "left", "right"]} className="flex-1">
         <View style={st.pinOverlay}>
@@ -310,13 +435,14 @@ export default function ProfilePickerScreen() {
           <Text style={st.headerSubtitle}>Select a host to connect</Text>
         </LinearGradient>
 
-        {/* Profile list or empty state */}
+        {/* Swipe hint */}
         {profiles.length > 0 ? (
           <>
             <View style={st.sectionLabelRow}>
               <Text style={st.sectionLabel}>
                 {profiles.length} {profiles.length === 1 ? "Host" : "Hosts"}
               </Text>
+              <Text style={st.swipeHint}>Swipe left to edit or delete</Text>
             </View>
             <FlatList
               data={profiles.sort(
@@ -380,15 +506,57 @@ const st = StyleSheet.create({
   headerSubtitle: { fontSize: 14, color: "rgba(255,255,255,0.7)", marginTop: 2 },
 
   // Section label
-  sectionLabelRow: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 },
+  sectionLabelRow: {
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+    paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8,
+  },
   sectionLabel: { fontSize: 13, fontWeight: "600", color: GRAY, textTransform: "uppercase", letterSpacing: 0.5 },
+  swipeHint: { fontSize: 11, color: "#C7C7CC", fontStyle: "italic" },
+
+  // Swipe container
+  swipeContainer: {
+    marginBottom: 8,
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+
+  // Action buttons behind card
+  actionsContainer: {
+    position: "absolute",
+    right: 0,
+    top: 0,
+    bottom: 0,
+    flexDirection: "row",
+    width: 140,
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  editAction: {
+    flex: 1,
+    backgroundColor: BLUE,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 2,
+  },
+  deleteAction: {
+    flex: 1,
+    backgroundColor: DELETE_RED,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 2,
+  },
+  actionText: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "600",
+  },
 
   // Profile Cards
   listContent: { paddingHorizontal: 16, paddingBottom: 100 },
   profileCard: {
     flexDirection: "row", alignItems: "center",
     paddingVertical: 14, paddingHorizontal: 16,
-    borderRadius: 12, marginBottom: 8, backgroundColor: "#FFFFFF",
+    borderRadius: 12, backgroundColor: "#FFFFFF",
     ...Platform.select({
       ios: { shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 6 },
       android: { elevation: 2 },

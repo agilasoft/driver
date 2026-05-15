@@ -20,6 +20,7 @@ import { trpc, createTRPCClient } from "@/lib/trpc";
 import { initManusRuntime, subscribeSafeAreaInsets } from "@/lib/_core/manus-runtime";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { SyncProvider } from "@/lib/sync-context";
+import { SessionTimeoutProvider, useSessionTimeout } from "@/lib/session-timeout";
 import {
   configureNotifications,
   requestNotificationPermissions,
@@ -36,7 +37,8 @@ const DEFAULT_WEB_FRAME: Rect = { x: 0, y: 0, width: 0, height: 0 };
 configureNotifications();
 
 function AppNavigator() {
-  const { auth, isLoading, activeProfile } = useAuth();
+  const { auth, isLoading, activeProfile, signOut } = useAuth();
+  const { isTimedOut, resetTimeout, recordActivity } = useSessionTimeout();
   const router = useRouter();
 
   // Start/stop assignment polling based on auth state
@@ -81,7 +83,16 @@ function AppNavigator() {
   // 1. Profile picker is ALWAYS the home/landing screen (like CargoNext hosts list)
   // 2. When a profile is unlocked (PIN/biometric), activeProfile is set → show tabs
   // 3. Login screen is a modal pushed from profile picker to add new profiles
-  const isUnlocked = auth?.isLoggedIn && activeProfile;
+  // Auto-lock on session timeout
+  useEffect(() => {
+    if (isTimedOut && auth?.isLoggedIn && activeProfile) {
+      signOut().then(() => {
+        router.replace("/profile-picker");
+      });
+    }
+  }, [isTimedOut, auth?.isLoggedIn, activeProfile, signOut, router]);
+
+  const isUnlocked = auth?.isLoggedIn && activeProfile && !isTimedOut;
 
   return (
     <>
@@ -91,6 +102,7 @@ function AppNavigator() {
         <Stack.Screen name="profile-picker" options={{ headerShown: false }} />
         <Stack.Screen name="login" options={{ presentation: "fullScreenModal", headerShown: false }} />
         <Stack.Screen name="config-scanner" options={{ presentation: "modal", headerShown: true }} />
+        <Stack.Screen name="edit-profile" options={{ presentation: "fullScreenModal", headerShown: false }} />
         <Stack.Screen name="oauth/callback" options={{ headerShown: false }} />
         {isUnlocked ? (
           <>
@@ -158,6 +170,7 @@ export default function RootLayout() {
   const content = (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
+        <SessionTimeoutProvider>
         <SyncProvider>
           <trpc.Provider client={trpcClient} queryClient={queryClient}>
             <QueryClientProvider client={queryClient}>
@@ -165,6 +178,7 @@ export default function RootLayout() {
             </QueryClientProvider>
           </trpc.Provider>
         </SyncProvider>
+        </SessionTimeoutProvider>
       </AuthProvider>
     </GestureHandlerRootView>
   );
