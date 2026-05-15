@@ -70,3 +70,4 @@
 - [x] Profile edit screen: edit server URL, API key, API secret, PIN, biometric without re-creating
 - [x] Swipe-to-delete profiles on profile picker screen
 - [x] Session timeout: auto-lock active profile after configurable idle period
+- [x] Regenerate app icon with rounded corners and more padding around steering wheel
