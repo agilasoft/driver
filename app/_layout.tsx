@@ -21,6 +21,7 @@ import { initManusRuntime, subscribeSafeAreaInsets } from "@/lib/_core/manus-run
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { SyncProvider } from "@/lib/sync-context";
 import { SessionTimeoutProvider, useSessionTimeout } from "@/lib/session-timeout";
+import { LiveLocationProvider } from "@/lib/live-location";
 import {
   configureNotifications,
   requestNotificationPermissions,
@@ -168,11 +169,13 @@ export default function RootLayout() {
       <AuthProvider>
         <SessionTimeoutProvider>
         <SyncProvider>
+          <LiveLocationProvider>
           <trpc.Provider client={trpcClient} queryClient={queryClient}>
             <QueryClientProvider client={queryClient}>
               <AppNavigator />
             </QueryClientProvider>
           </trpc.Provider>
+          </LiveLocationProvider>
         </SyncProvider>
         </SessionTimeoutProvider>
       </AuthProvider>

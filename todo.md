@@ -72,3 +72,6 @@
 - [x] Session timeout: auto-lock active profile after configurable idle period
 - [x] Regenerate app icon with rounded corners and more padding around steering wheel
 - [x] Fix: Opening maps crashes the app
+- [x] Google Maps API key setup: config plugin + env variable for production Android/iOS builds
+- [x] Turn-by-turn navigation: "Navigate" button on each leg to open device navigation app
+- [x] Live location sharing: share real-time GPS position back to Frappe server for fleet tracking

@@ -24,6 +24,7 @@ import {
 import { checkBiometricAvailability } from "@/lib/profile-manager";
 import { useThemeContext, type ThemePreference } from "@/lib/theme-provider";
 import { useSessionTimeout, TIMEOUT_OPTIONS } from "@/lib/session-timeout";
+import { useLiveLocation, INTERVAL_OPTIONS } from "@/lib/live-location";
 import { LinearGradient } from "expo-linear-gradient";
 
 const BLUE = "#3478C6";
@@ -47,6 +48,7 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { themePreference, setThemePreference, colorScheme } = useThemeContext();
   const { timeoutMinutes, setTimeoutMinutes } = useSessionTimeout();
+  const { isEnabled: liveLocEnabled, isTracking, lastUpdate, intervalMs, setEnabled: setLiveLocEnabled, setIntervalMs } = useLiveLocation();
   const params = useLocalSearchParams<{
     scannedSiteUrl?: string;
     scannedApiKey?: string;
@@ -655,6 +657,79 @@ export default function SettingsScreen() {
               </TouchableOpacity>
             </React.Fragment>
           ))}
+        </View>
+
+        {/* Live Location */}
+        <Text style={st.sectionLabel}>LIVE LOCATION</Text>
+        <View style={[st.card, { padding: 0, overflow: "hidden" }]}>
+          <TouchableOpacity
+            style={st.securityRow}
+            onPress={() => setLiveLocEnabled(!liveLocEnabled)}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons name="my-location" size={22} color={liveLocEnabled ? GREEN : GRAY} />
+            <View style={{ flex: 1 }}>
+              <Text style={st.securityLabel}>Share Location</Text>
+              <Text style={st.securityDesc}>
+                {liveLocEnabled
+                  ? isTracking
+                    ? "Actively sharing your location with the server"
+                    : "Enabled — waiting for GPS signal"
+                  : "Disabled — location is not shared"}
+              </Text>
+            </View>
+            <View style={[st.statusDot, { backgroundColor: isTracking ? GREEN : liveLocEnabled ? WARN : BORDER }]} />
+          </TouchableOpacity>
+
+          {liveLocEnabled && (
+            <>
+              <View style={st.rowDivider} />
+              <View style={st.timeoutHeader}>
+                <MaterialIcons name="update" size={22} color={BLUE} />
+                <View style={{ flex: 1 }}>
+                  <Text style={st.timeoutTitle}>Update Interval</Text>
+                  <Text style={st.timeoutDesc}>
+                    How often to send location to the server
+                  </Text>
+                </View>
+              </View>
+              {INTERVAL_OPTIONS.map((opt, idx) => (
+                <React.Fragment key={opt.value}>
+                  <View style={st.rowDivider} />
+                  <TouchableOpacity
+                    style={st.timeoutRow}
+                    onPress={() => setIntervalMs(opt.value)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[
+                      st.timeoutLabel,
+                      { color: intervalMs === opt.value ? BLUE : FG },
+                    ]}>
+                      {opt.label}
+                    </Text>
+                    {intervalMs === opt.value ? (
+                      <MaterialIcons name="check-circle" size={22} color={BLUE} />
+                    ) : (
+                      <MaterialIcons name="radio-button-unchecked" size={22} color={BORDER} />
+                    )}
+                  </TouchableOpacity>
+                </React.Fragment>
+              ))}
+
+              {lastUpdate && (
+                <>
+                  <View style={st.rowDivider} />
+                  <View style={[st.settingRow, { paddingVertical: 12 }]}>
+                    <MaterialIcons name="gps-fixed" size={18} color={GREEN} />
+                    <Text style={[st.settingLabel, { fontSize: 13 }]}>Last Update</Text>
+                    <Text style={[st.settingValue, { fontSize: 12, color: GRAY }]}>
+                      {new Date(lastUpdate.timestamp).toLocaleTimeString()}
+                    </Text>
+                  </View>
+                </>
+              )}
+            </>
+          )}
         </View>
 
         {/* Notifications */}

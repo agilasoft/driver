@@ -10,6 +10,7 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  Linking,
   StyleSheet,
 } from "react-native";
 import { Image } from "expo-image";
@@ -229,6 +230,33 @@ export default function LegDetailScreen() {
     return `${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`;
   };
 
+  const openInMaps = (label: string, lat?: number, lng?: number) => {
+    if (lat && lng) {
+      // Open with coordinates for turn-by-turn navigation
+      const url =
+        Platform.OS === "ios"
+          ? `maps:0,0?q=${encodeURIComponent(label)}@${lat},${lng}`
+          : Platform.OS === "android"
+          ? `geo:${lat},${lng}?q=${lat},${lng}(${encodeURIComponent(label)})`
+          : `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+      Linking.openURL(url).catch(() => {
+        Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`);
+      });
+    } else {
+      // Open with address search for navigation
+      const encoded = encodeURIComponent(label);
+      const url =
+        Platform.OS === "ios"
+          ? `maps:0,0?q=${encoded}`
+          : Platform.OS === "android"
+          ? `geo:0,0?q=${encoded}`
+          : `https://www.google.com/maps/dir/?api=1&destination=${encoded}`;
+      Linking.openURL(url).catch(() => {
+        Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encoded}`);
+      });
+    }
+  };
+
   if (isLoading) {
     return (
       <>
@@ -282,6 +310,34 @@ export default function LegDetailScreen() {
                   <Text style={st.jobText}>Job: {leg.transport_job}</Text>
                 </View>
               ) : null}
+
+              {/* Navigate Buttons */}
+              <View style={st.navBtnRow}>
+                <TouchableOpacity
+                  style={[st.navBtn, { backgroundColor: GREEN }]}
+                  onPress={() => openInMaps(
+                    leg.pick_address || leg.facility_from || "Pick-up",
+                    pickGps?.latitude,
+                    pickGps?.longitude
+                  )}
+                  activeOpacity={0.8}
+                >
+                  <MaterialIcons name="navigation" size={18} color="#fff" />
+                  <Text style={st.navBtnText} numberOfLines={1}>Navigate to Pick-up</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[st.navBtn, { backgroundColor: RED }]}
+                  onPress={() => openInMaps(
+                    leg.drop_address || leg.facility_to || "Drop-off",
+                    dropGps?.latitude,
+                    dropGps?.longitude
+                  )}
+                  activeOpacity={0.8}
+                >
+                  <MaterialIcons name="navigation" size={18} color="#fff" />
+                  <Text style={st.navBtnText} numberOfLines={1}>Navigate to Drop-off</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
 
@@ -547,6 +603,9 @@ const st = StyleSheet.create({
   barcodeBtn: { borderRadius: 12, borderWidth: 1, borderColor: BORDER, paddingVertical: 16, paddingHorizontal: 16, backgroundColor: SURFACE },
   barcodeRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
   barcodeText: { fontSize: 14, fontWeight: "600" },
+  navBtnRow: { flexDirection: "row", gap: 10, marginTop: 14, paddingTop: 14, borderTopWidth: 0.5, borderTopColor: BORDER },
+  navBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 10, paddingVertical: 12 },
+  navBtnText: { color: "#fff", fontSize: 13, fontWeight: "700" },
   saveBar: { position: "absolute", bottom: 0, left: 0, right: 0, padding: 16, backgroundColor: "#FFFFFF", borderTopWidth: 0.5, borderTopColor: BORDER },
   saveBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 12, paddingVertical: 16, backgroundColor: BLUE },
   saveBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
