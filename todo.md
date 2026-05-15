@@ -75,3 +75,5 @@
 - [x] Google Maps API key setup: config plugin + env variable for production Android/iOS builds
 - [x] Turn-by-turn navigation: "Navigate" button on each leg to open device navigation app
 - [x] Live location sharing: share real-time GPS position back to Frappe server for fleet tracking
+- [x] Offline location queue: buffer GPS updates when offline, batch sync on reconnect
+- [x] Persistent status indicator/banner on home screen when live location sharing is active

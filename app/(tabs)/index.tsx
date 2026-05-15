@@ -24,6 +24,7 @@ import {
   getCachedBundle,
 } from "@/lib/offline-store";
 import { LinearGradient } from "expo-linear-gradient";
+import { useLiveLocation } from "@/lib/live-location";
 
 const BLUE = "#3478C6";
 const BLUE_LIGHT = "#5B9BD5";
@@ -55,6 +56,7 @@ export default function RunSheetsScreen() {
   const router = useRouter();
   const { isOnline } = useSync();
   const { auth } = useAuth();
+  const { isEnabled: liveLocEnabled, isTracking, pendingQueueCount, isSyncingQueue } = useLiveLocation();
   const [sheets, setSheets] = useState<RunSheet[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -341,6 +343,33 @@ export default function RunSheetsScreen() {
 
       <ConnectivityBanner />
 
+      {/* Live Location Status Banner */}
+      {liveLocEnabled && (
+        <View style={styles.liveLocBanner}>
+          <View style={styles.liveLocDot}>
+            <View style={[styles.liveLocDotInner, { backgroundColor: isTracking ? "#34C759" : ORANGE }]} />
+          </View>
+          <MaterialIcons
+            name={isTracking ? "my-location" : "location-searching"}
+            size={16}
+            color={isTracking ? "#34C759" : ORANGE}
+          />
+          <Text style={styles.liveLocText}>
+            {isTracking ? "Location sharing active" : "Waiting for GPS..."}
+          </Text>
+          {pendingQueueCount > 0 && (
+            <View style={styles.liveLocQueueBadge}>
+              <MaterialIcons
+                name={isSyncingQueue ? "sync" : "cloud-queue"}
+                size={13}
+                color="#fff"
+              />
+              <Text style={styles.liveLocQueueText}>{pendingQueueCount}</Text>
+            </View>
+          )}
+        </View>
+      )}
+
       {isLoading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={BLUE} />
@@ -584,6 +613,49 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#FFFFFF",
+  },
+  // Live Location Banner
+  liveLocBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: "#F0F8FF",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#E5E5EA",
+    gap: 8,
+  },
+  liveLocDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  liveLocDotInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  liveLocText: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#1A1A1A",
+    flex: 1,
+  },
+  liveLocQueueBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: ORANGE,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  liveLocQueueText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#fff",
   },
   loadingText: {
     fontSize: 14,
