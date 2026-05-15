@@ -2,11 +2,23 @@ import { Platform } from "react-native";
 import * as Notifications from "expo-notifications";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { fetchRunSheets, getStoredAuth } from "./frappe-api";
+import { getActiveProfileId } from "./profile-manager";
 
-const KNOWN_SHEETS_KEY = "notification_known_sheets";
+const KNOWN_SHEETS_PREFIX = "notification_known_sheets";
 const POLL_INTERVAL = 60_000; // 60 seconds
 
 let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Get the namespaced storage key for the current profile.
+ * Falls back to the global key if no active profile is set.
+ */
+async function getKnownSheetsKey(): Promise<string> {
+  const profileId = await getActiveProfileId();
+  return profileId
+    ? `${KNOWN_SHEETS_PREFIX}_${profileId}`
+    : KNOWN_SHEETS_PREFIX;
+}
 
 /**
  * Configure the notification handler so notifications show in-app.
@@ -48,18 +60,22 @@ export async function requestNotificationPermissions(): Promise<boolean> {
 
 /**
  * Get the set of known run sheet names (already notified about).
+ * Namespaced per active profile to prevent cross-profile notification bleed.
  */
 async function getKnownSheets(): Promise<Set<string>> {
-  const raw = await AsyncStorage.getItem(KNOWN_SHEETS_KEY);
+  const key = await getKnownSheetsKey();
+  const raw = await AsyncStorage.getItem(key);
   if (!raw) return new Set();
   return new Set(JSON.parse(raw) as string[]);
 }
 
 /**
  * Save the set of known run sheet names.
+ * Namespaced per active profile.
  */
 async function saveKnownSheets(names: Set<string>): Promise<void> {
-  await AsyncStorage.setItem(KNOWN_SHEETS_KEY, JSON.stringify([...names]));
+  const key = await getKnownSheetsKey();
+  await AsyncStorage.setItem(key, JSON.stringify([...names]));
 }
 
 /**
@@ -119,9 +135,10 @@ export function stopAssignmentPolling(): void {
 }
 
 /**
- * Clear the known sheets cache (e.g., on logout).
+ * Clear the known sheets cache for the current profile (e.g., on logout/sign-out).
  */
 export async function clearNotificationCache(): Promise<void> {
-  await AsyncStorage.removeItem(KNOWN_SHEETS_KEY);
+  const key = await getKnownSheetsKey();
+  await AsyncStorage.removeItem(key);
   stopAssignmentPolling();
 }

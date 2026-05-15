@@ -45,7 +45,7 @@
 - [x] Biometric authentication (Face ID / fingerprint) to unlock driver profiles
 - [x] Profile switcher screen to select which driver profile to use
 - [x] Profile management in Settings (add, edit, delete profiles)
-- [ ] Namespace notification cache per profile to prevent cross-profile bleed
-- [ ] Delivery notes/comments field on each transport leg
-- [ ] Dark mode toggle in Settings (manual override)
-- [ ] Leg completion progress bar on run sheet cards
+- [x] Namespace notification cache per profile to prevent cross-profile bleed
+- [x] Delivery notes/comments field on each transport leg
+- [x] Dark mode toggle in Settings (manual override)
+- [x] Leg completion progress bar on run sheet cards

@@ -18,13 +18,19 @@ import { StatusBadge } from "@/components/status-badge";
 import { useColors } from "@/hooks/use-colors";
 import { useSync } from "@/lib/sync-context";
 import { useAuth } from "@/lib/auth-context";
-import type { RunSheet } from "@/lib/types";
+import type { RunSheet, TransportLeg } from "@/lib/types";
 import {
   getCachedRunSheets,
   refreshRunSheets,
+  getCachedBundle,
 } from "@/lib/offline-store";
 
 type DateFilter = "today" | "week" | "all";
+
+interface LegProgress {
+  total: number;
+  completed: number;
+}
 
 function getStartOfDay(): Date {
   const d = new Date();
@@ -51,6 +57,7 @@ export default function RunSheetsScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [legProgressMap, setLegProgressMap] = useState<Record<string, LegProgress>>({});
 
   const loadData = useCallback(
     async (showRefresh = false) => {
@@ -58,13 +65,31 @@ export default function RunSheetsScreen() {
       else setIsLoading(true);
 
       try {
+        let data: RunSheet[];
         if (isOnline) {
-          const data = await refreshRunSheets();
-          setSheets(data);
+          data = await refreshRunSheets();
         } else {
-          const cached = await getCachedRunSheets();
-          setSheets(cached);
+          data = await getCachedRunSheets();
         }
+        setSheets(data);
+
+        // Load leg progress from cached bundles
+        const progressMap: Record<string, LegProgress> = {};
+        for (const sheet of data) {
+          try {
+            const bundle = await getCachedBundle(sheet.name);
+            if (bundle && bundle.legs) {
+              const total = bundle.legs.length;
+              const completed = bundle.legs.filter(
+                (l: TransportLeg) => l.status === "Completed" || l.status === "Billed"
+              ).length;
+              progressMap[sheet.name] = { total, completed };
+            }
+          } catch {
+            // Skip
+          }
+        }
+        setLegProgressMap(progressMap);
       } catch {
         const cached = await getCachedRunSheets();
         setSheets(cached);
@@ -149,6 +174,7 @@ export default function RunSheetsScreen() {
     const isActive =
       item.status === "Dispatched" || item.status === "In-Progress";
     const statusColor = getStatusColor(item.status);
+    const progress = legProgressMap[item.name];
 
     return (
       <TouchableOpacity
@@ -203,6 +229,26 @@ export default function RunSheetsScreen() {
           >
             {item.route_name}
           </Text>
+        ) : null}
+
+        {/* Leg Progress Bar */}
+        {progress && progress.total > 0 ? (
+          <View style={styles.progressContainer}>
+            <View style={[styles.progressTrack, { backgroundColor: colors.border + "40" }]}>
+              <View
+                style={[
+                  styles.progressFill,
+                  {
+                    backgroundColor: progress.completed === progress.total ? colors.success : colors.primary,
+                    width: `${Math.round((progress.completed / progress.total) * 100)}%`,
+                  },
+                ]}
+              />
+            </View>
+            <Text style={[styles.progressText, { color: colors.muted }]}>
+              {progress.completed}/{progress.total} legs
+            </Text>
+          </View>
         ) : null}
 
         {/* Bottom info row */}
@@ -515,6 +561,29 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     marginBottom: 10,
     marginTop: 2,
+  },
+  progressContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 10,
+  },
+  progressTrack: {
+    flex: 1,
+    height: 6,
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: 6,
+    borderRadius: 3,
+    minWidth: 2,
+  },
+  progressText: {
+    fontSize: 11,
+    fontWeight: "600",
+    minWidth: 52,
+    textAlign: "right",
   },
   cardInfoRow: {
     flexDirection: "row",

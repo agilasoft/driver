@@ -53,6 +53,9 @@ export interface TransportLeg {
   pick_longitude?: number;
   drop_latitude?: number;
   drop_longitude?: number;
+  // Delivery notes/comments
+  pick_notes?: string;
+  drop_notes?: string;
   // Aliases from API
   signature?: string;
   signed_by?: string;

@@ -23,6 +23,7 @@ import {
   stopAssignmentPolling,
 } from "@/lib/notifications";
 import { checkBiometricAvailability } from "@/lib/profile-manager";
+import { useThemeContext, type ThemePreference } from "@/lib/theme-provider";
 
 export default function SettingsScreen() {
   const {
@@ -33,6 +34,7 @@ export default function SettingsScreen() {
   const { isOnline, pendingCount, isSyncing, lastSync, syncNow } = useSync();
   const colors = useColors();
   const router = useRouter();
+  const { themePreference, setThemePreference, colorScheme } = useThemeContext();
   const params = useLocalSearchParams<{
     scannedSiteUrl?: string;
     scannedApiKey?: string;
@@ -590,6 +592,34 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Appearance */}
+        <Text style={[s.sectionLabel, { color: colors.muted }]}>APPEARANCE</Text>
+        <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border, padding: 0, overflow: "hidden" }]}>
+          <ThemeOption
+            label="System Default"
+            icon="settings-brightness"
+            selected={themePreference === "system"}
+            onPress={() => setThemePreference("system")}
+            colors={colors}
+          />
+          <View style={[s.rowDivider, { backgroundColor: colors.border }]} />
+          <ThemeOption
+            label="Light Mode"
+            icon="light-mode"
+            selected={themePreference === "light"}
+            onPress={() => setThemePreference("light")}
+            colors={colors}
+          />
+          <View style={[s.rowDivider, { backgroundColor: colors.border }]} />
+          <ThemeOption
+            label="Dark Mode"
+            icon="dark-mode"
+            selected={themePreference === "dark"}
+            onPress={() => setThemePreference("dark")}
+            colors={colors}
+          />
+        </View>
+
         {/* Notifications */}
         <Text style={[s.sectionLabel, { color: colors.muted }]}>NOTIFICATIONS</Text>
         <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border, padding: 0, overflow: "hidden" }]}>
@@ -646,6 +676,22 @@ export default function SettingsScreen() {
         <Text style={[s.brand, { color: colors.muted }]}>Powered by Agilasoft Cloud Technologies Inc.</Text>
       </ScrollView>
     </ScreenContainer>
+  );
+}
+
+function ThemeOption({ label, icon, selected, onPress, colors }: {
+  label: string; icon: string; selected: boolean; onPress: () => void; colors: any;
+}) {
+  return (
+    <TouchableOpacity style={s.themeRow} onPress={onPress} activeOpacity={0.7}>
+      <MaterialIcons name={icon as any} size={22} color={selected ? colors.primary : colors.muted} />
+      <Text style={[s.themeLabel, { color: selected ? colors.primary : colors.foreground }]}>{label}</Text>
+      {selected ? (
+        <MaterialIcons name="check-circle" size={22} color={colors.primary} />
+      ) : (
+        <MaterialIcons name="radio-button-unchecked" size={22} color={colors.border} />
+      )}
+    </TouchableOpacity>
   );
 }
 
@@ -732,6 +778,9 @@ const s = StyleSheet.create({
     borderRadius: 20, borderWidth: 1, paddingVertical: 18, marginBottom: 12,
   },
   profileActionText: { fontSize: 16, fontWeight: "700" },
+  // Theme rows
+  themeRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, paddingVertical: 16 },
+  themeLabel: { fontSize: 15, fontWeight: "600", flex: 1 },
   version: { fontSize: 13, textAlign: "center", marginTop: 12 },
   brand: { fontSize: 12, textAlign: "center", marginTop: 4 },
 });

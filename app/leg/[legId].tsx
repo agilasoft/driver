@@ -61,6 +61,8 @@ export default function LegDetailScreen() {
   const [dropGps, setDropGps] = useState<GpsCoords | null>(null);
   const [pickBarcode, setPickBarcode] = useState<BarcodeRecord | null>(null);
   const [dropBarcode, setDropBarcode] = useState<BarcodeRecord | null>(null);
+  const [pickNotes, setPickNotes] = useState("");
+  const [dropNotes, setDropNotes] = useState("");
 
   const loadLeg = useCallback(async () => {
     if (!runSheetId || !legId) return;
@@ -77,6 +79,8 @@ export default function LegDetailScreen() {
           setDropSignature(found.drop_signature || "");
           setPickTimestamp(found.start_date || "");
           setDropTimestamp(found.end_date || "");
+          setPickNotes(found.pick_notes || "");
+          setDropNotes(found.drop_notes || "");
           if (found.pick_latitude && found.pick_longitude) {
             setPickGps({ latitude: found.pick_latitude, longitude: found.pick_longitude, accuracy: null });
           }
@@ -171,6 +175,8 @@ export default function LegDetailScreen() {
       if (dropSignature !== (leg.drop_signature || "")) changes.drop_signature = dropSignature;
       if (pickTimestamp !== (leg.start_date || "")) changes.start_date = pickTimestamp;
       if (dropTimestamp !== (leg.end_date || "")) changes.end_date = dropTimestamp;
+      if (pickNotes !== (leg.pick_notes || "")) changes.pick_notes = pickNotes;
+      if (dropNotes !== (leg.drop_notes || "")) changes.drop_notes = dropNotes;
       if (dropTimestamp || dropSignature) {
         changes.date_signed = new Date().toISOString().replace("T", " ").slice(0, 19);
       }
@@ -363,6 +369,22 @@ export default function LegDetailScreen() {
 
               <View style={s.fieldSpacer} />
 
+              {/* Delivery Notes */}
+              <FieldLabel label="Notes / Comments" />
+              <TextInput
+                style={[s.notesInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
+                placeholder="Add pick-up notes, instructions, or comments..."
+                placeholderTextColor={colors.muted}
+                value={pickNotes}
+                onChangeText={setPickNotes}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+                returnKeyType="default"
+              />
+
+              <View style={s.fieldSpacer} />
+
               {/* Photo */}
               <FieldLabel label="Photo" />
               <TouchableOpacity
@@ -486,6 +508,22 @@ export default function LegDetailScreen() {
 
               <View style={s.fieldSpacer} />
 
+              {/* Delivery Notes */}
+              <FieldLabel label="Notes / Comments" />
+              <TextInput
+                style={[s.notesInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
+                placeholder="Add drop-off notes, instructions, or comments..."
+                placeholderTextColor={colors.muted}
+                value={dropNotes}
+                onChangeText={setDropNotes}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+                returnKeyType="default"
+              />
+
+              <View style={s.fieldSpacer} />
+
               {/* Photo */}
               <FieldLabel label="Photo" />
               <TouchableOpacity
@@ -594,6 +632,7 @@ const s = StyleSheet.create({
   signatureText: { fontSize: 14, fontWeight: "600" },
   signatureTap: { fontSize: 12 },
   textInput: { borderRadius: 14, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 14, fontSize: 15 },
+  notesInput: { borderRadius: 14, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 14, fontSize: 15, minHeight: 80 },
   photoBtn: { borderRadius: 14, borderWidth: 1, overflow: "hidden" },
   photoImage: { width: "100%", height: 180 },
   photoEmpty: { height: 100, alignItems: "center", justifyContent: "center", gap: 6 },
