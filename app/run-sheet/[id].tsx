@@ -9,6 +9,7 @@ import {
   Alert,
   StyleSheet,
   Platform,
+  Linking,
 } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
@@ -123,20 +124,52 @@ export default function RunSheetDetailScreen() {
         Accept: "application/json",
       };
       const resolved = await resolveAllLegCoordinates({ legs: bundle.legs, baseUrl, headers });
-      const legsJson = JSON.stringify(
-        resolved.map((r) => ({
-          name: r.legName,
-          pickLat: r.pickCoords?.latitude || 0,
-          pickLng: r.pickCoords?.longitude || 0,
-          dropLat: r.dropCoords?.latitude || 0,
-          dropLng: r.dropCoords?.longitude || 0,
-          facilityFrom: r.facilityFrom,
-          facilityTo: r.facilityTo,
-        }))
-      );
-      router.push({ pathname: "/route-map", params: { legs: legsJson, title: id || "Route" } });
+
+      // Build list of all stops (pick then drop for each leg, deduplicated)
+      const stops: { lat: number; lng: number; label: string }[] = [];
+      for (const r of resolved) {
+        if (r.pickCoords) {
+          stops.push({ lat: r.pickCoords.latitude, lng: r.pickCoords.longitude, label: r.facilityFrom || "Pick" });
+        }
+        if (r.dropCoords) {
+          stops.push({ lat: r.dropCoords.latitude, lng: r.dropCoords.longitude, label: r.facilityTo || "Drop" });
+        }
+      }
+
+      if (stops.length === 0) {
+        // Fallback: open with address search
+        const addresses = bundle.legs
+          .map((l) => l.pick_address || l.facility_from || l.drop_address || l.facility_to)
+          .filter(Boolean);
+        const query = encodeURIComponent(addresses.join(" to "));
+        await Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`);
+        return;
+      }
+
+      const destination = stops[stops.length - 1];
+      const waypoints = stops.slice(0, -1);
+
+      if (Platform.OS === "ios") {
+        // Apple Maps with waypoints not supported well, use Google Maps URL
+        const waypointStr = waypoints.map((w) => `${w.lat},${w.lng}`).join("/");
+        const url = waypoints.length > 0
+          ? `https://www.google.com/maps/dir/${waypointStr}/${destination.lat},${destination.lng}`
+          : `maps:0,0?daddr=${destination.lat},${destination.lng}`;
+        await Linking.openURL(url).catch(() =>
+          Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${destination.lat},${destination.lng}`)
+        );
+      } else if (Platform.OS === "android") {
+        const waypointStr = waypoints.map((w) => `${w.lat},${w.lng}`).join("%7C");
+        const url = `https://www.google.com/maps/dir/?api=1&destination=${destination.lat},${destination.lng}${waypoints.length > 0 ? `&waypoints=${waypointStr}` : ""}&travelmode=driving`;
+        await Linking.openURL(url);
+      } else {
+        // Web
+        const waypointStr = waypoints.map((w) => `${w.lat},${w.lng}`).join("%7C");
+        const url = `https://www.google.com/maps/dir/?api=1&destination=${destination.lat},${destination.lng}${waypoints.length > 0 ? `&waypoints=${waypointStr}` : ""}&travelmode=driving`;
+        await Linking.openURL(url);
+      }
     } catch {
-      Alert.alert("Error", "Failed to resolve route addresses. Please try again.");
+      Alert.alert("Error", "Failed to open route in maps. Please try again.");
     } finally {
       setIsResolvingMap(false);
     }

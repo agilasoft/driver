@@ -79,3 +79,6 @@
 - [x] Persistent status indicator/banner on home screen when live location sharing is active
 - [x] Geofence alerts: auto-trigger pick/drop timestamps when driver enters predefined radius around delivery location
 - [x] Driver shift log: clock-in/clock-out toggle in header, synced to Frappe server
+- [x] Remove built-in maps tab from tab bar
+- [x] Remove map-view components (native, web, d.ts) and route-map screen
+- [x] Replace all in-app map references with external Google Maps / Apple Maps links

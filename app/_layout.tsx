@@ -109,7 +109,6 @@ function AppNavigator() {
             <Stack.Screen name="run-sheet/[id]" options={{ headerShown: true }} />
             <Stack.Screen name="leg/[legId]" options={{ headerShown: true }} />
             <Stack.Screen name="signature-modal" options={{ presentation: "modal", headerShown: true }} />
-            <Stack.Screen name="route-map" options={{ headerShown: true }} />
             <Stack.Screen name="barcode-scanner" options={{ presentation: "modal", headerShown: true }} />
           </>
         ) : null}
