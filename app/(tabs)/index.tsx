@@ -15,7 +15,6 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { ScreenContainer } from "@/components/screen-container";
 import { ConnectivityBanner } from "@/components/connectivity-banner";
 import { StatusBadge } from "@/components/status-badge";
-import { useColors } from "@/hooks/use-colors";
 import { useSync } from "@/lib/sync-context";
 import { useAuth } from "@/lib/auth-context";
 import type { RunSheet, TransportLeg } from "@/lib/types";
@@ -24,6 +23,11 @@ import {
   refreshRunSheets,
   getCachedBundle,
 } from "@/lib/offline-store";
+import { LinearGradient } from "expo-linear-gradient";
+
+const BLUE = "#3478C6";
+const BLUE_LIGHT = "#5B9BD5";
+const ORANGE = "#F27A2E";
 
 type DateFilter = "today" | "week" | "all";
 
@@ -40,8 +44,8 @@ function getStartOfDay(): Date {
 
 function getStartOfWeek(): Date {
   const d = new Date();
-  const day = d.getDay(); // 0=Sun
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
   d.setDate(diff);
   d.setHours(0, 0, 0, 0);
   return d;
@@ -49,7 +53,6 @@ function getStartOfWeek(): Date {
 
 export default function RunSheetsScreen() {
   const router = useRouter();
-  const colors = useColors();
   const { isOnline } = useSync();
   const { auth } = useAuth();
   const [sheets, setSheets] = useState<RunSheet[]>([]);
@@ -73,7 +76,6 @@ export default function RunSheetsScreen() {
         }
         setSheets(data);
 
-        // Load leg progress from cached bundles
         const progressMap: Record<string, LegProgress> = {};
         for (const sheet of data) {
           try {
@@ -105,35 +107,25 @@ export default function RunSheetsScreen() {
     loadData();
   }, [loadData]);
 
-  // Apply client-side date filter and search
   const filteredSheets = useMemo(() => {
     let result = sheets;
 
-    // Date filter
     if (dateFilter !== "all") {
       const cutoff = dateFilter === "today" ? getStartOfDay() : getStartOfWeek();
       result = result.filter((s) => {
         if (!s.run_date) return false;
         try {
-          const runDate = new Date(s.run_date);
-          return runDate >= cutoff;
+          return new Date(s.run_date) >= cutoff;
         } catch {
           return false;
         }
       });
     }
 
-    // Search filter
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       result = result.filter((s) => {
-        const searchable = [
-          s.name,
-          s.route_name,
-          s.vehicle,
-          s.run_type,
-          s.status,
-        ]
+        const searchable = [s.name, s.route_name, s.vehicle, s.run_type, s.status]
           .filter(Boolean)
           .join(" ")
           .toLowerCase();
@@ -148,10 +140,7 @@ export default function RunSheetsScreen() {
     if (!dateStr) return "—";
     try {
       const d = new Date(dateStr);
-      return d.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-      });
+      return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
     } catch {
       return dateStr;
     }
@@ -159,132 +148,82 @@ export default function RunSheetsScreen() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "Dispatched":
-        return colors.primary;
-      case "In-Progress":
-        return colors.warning;
-      case "Completed":
-        return colors.success;
-      default:
-        return colors.muted;
+      case "Dispatched": return BLUE;
+      case "In-Progress": return ORANGE;
+      case "Completed": return "#34C759";
+      default: return "#8E8E93";
     }
   };
 
   const renderItem = ({ item }: { item: RunSheet }) => {
-    const isActive =
-      item.status === "Dispatched" || item.status === "In-Progress";
+    const isActive = item.status === "Dispatched" || item.status === "In-Progress";
     const statusColor = getStatusColor(item.status);
     const progress = legProgressMap[item.name];
 
     return (
       <TouchableOpacity
         onPress={() =>
-          router.push({
-            pathname: "/run-sheet/[id]",
-            params: { id: item.name },
-          })
+          router.push({ pathname: "/run-sheet/[id]", params: { id: item.name } })
         }
         activeOpacity={0.7}
         style={[
           styles.card,
           {
-            backgroundColor: colors.surface,
             borderLeftColor: statusColor,
             borderLeftWidth: 4,
-            ...Platform.select({
-              ios: {
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.06,
-                shadowRadius: 8,
-              },
-              android: { elevation: 2 },
-            }),
           },
         ]}
       >
-        {/* Top row: ID + Status */}
         <View style={styles.cardTopRow}>
           <View style={styles.cardIdContainer}>
-            {isActive && (
-              <View
-                style={[styles.activePulse, { backgroundColor: statusColor }]}
-              />
-            )}
-            <Text
-              style={[styles.cardId, { color: colors.foreground }]}
-              numberOfLines={1}
-            >
-              {item.name}
-            </Text>
+            {isActive && <View style={[styles.activePulse, { backgroundColor: statusColor }]} />}
+            <Text style={styles.cardId} numberOfLines={1}>{item.name}</Text>
           </View>
           <StatusBadge status={item.status} />
         </View>
 
-        {/* Route name */}
         {item.route_name ? (
-          <Text
-            style={[styles.routeName, { color: colors.foreground }]}
-            numberOfLines={1}
-          >
-            {item.route_name}
-          </Text>
+          <Text style={styles.routeName} numberOfLines={1}>{item.route_name}</Text>
         ) : null}
 
-        {/* Leg Progress Bar */}
         {progress && progress.total > 0 ? (
           <View style={styles.progressContainer}>
-            <View style={[styles.progressTrack, { backgroundColor: colors.border + "40" }]}>
+            <View style={styles.progressTrack}>
               <View
                 style={[
                   styles.progressFill,
                   {
-                    backgroundColor: progress.completed === progress.total ? colors.success : colors.primary,
+                    backgroundColor: progress.completed === progress.total ? "#34C759" : BLUE,
                     width: `${Math.round((progress.completed / progress.total) * 100)}%`,
                   },
                 ]}
               />
             </View>
-            <Text style={[styles.progressText, { color: colors.muted }]}>
+            <Text style={styles.progressText}>
               {progress.completed}/{progress.total} legs
             </Text>
           </View>
         ) : null}
 
-        {/* Bottom info row */}
         <View style={styles.cardInfoRow}>
           <View style={styles.infoItem}>
-            <MaterialIcons name="event" size={15} color={colors.muted} />
-            <Text style={[styles.infoText, { color: colors.muted }]}>
-              {formatDate(item.run_date)}
-            </Text>
+            <MaterialIcons name="event" size={15} color="#8E8E93" />
+            <Text style={styles.infoText}>{formatDate(item.run_date)}</Text>
           </View>
           {item.vehicle ? (
             <View style={styles.infoItem}>
-              <MaterialIcons
-                name="local-shipping"
-                size={15}
-                color={colors.muted}
-              />
-              <Text style={[styles.infoText, { color: colors.muted }]}>
-                {item.vehicle}
-              </Text>
+              <MaterialIcons name="local-shipping" size={15} color="#8E8E93" />
+              <Text style={styles.infoText}>{item.vehicle}</Text>
             </View>
           ) : null}
           {item.run_type ? (
             <View style={styles.infoItem}>
-              <MaterialIcons name="label" size={15} color={colors.muted} />
-              <Text style={[styles.infoText, { color: colors.muted }]}>
-                {item.run_type}
-              </Text>
+              <MaterialIcons name="label" size={15} color="#8E8E93" />
+              <Text style={styles.infoText}>{item.run_type}</Text>
             </View>
           ) : null}
           <View style={styles.cardArrow}>
-            <MaterialIcons
-              name="chevron-right"
-              size={22}
-              color={colors.border}
-            />
+            <MaterialIcons name="chevron-right" size={22} color="#C7C7CC" />
           </View>
         </View>
       </TouchableOpacity>
@@ -295,15 +234,11 @@ export default function RunSheetsScreen() {
     if (isLoading) return null;
     return (
       <View style={styles.emptyContainer}>
-        <View
-          style={[styles.emptyIconCircle, { backgroundColor: colors.surface }]}
-        >
-          <MaterialIcons name="description" size={48} color={colors.border} />
+        <View style={styles.emptyIconCircle}>
+          <MaterialIcons name="description" size={48} color="#C7C7CC" />
         </View>
-        <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-          No Run Sheets Found
-        </Text>
-        <Text style={[styles.emptySubtitle, { color: colors.muted }]}>
+        <Text style={styles.emptyTitle}>No Run Sheets Found</Text>
+        <Text style={styles.emptySubtitle}>
           {searchQuery
             ? `No results for "${searchQuery}"`
             : dateFilter !== "all"
@@ -323,63 +258,52 @@ export default function RunSheetsScreen() {
   ];
 
   return (
-    <ScreenContainer>
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
+    <ScreenContainer containerClassName="bg-white">
+      {/* Blue gradient header */}
+      <LinearGradient
+        colors={[BLUE, BLUE_LIGHT]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={styles.gradientHeader}
+      >
         <View style={styles.headerTop}>
           <View>
-            <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-              Run Sheets
-            </Text>
+            <Text style={styles.headerTitle}>Run Sheets</Text>
             {auth?.driverName ? (
-              <Text style={[styles.headerSubtitle, { color: colors.muted }]}>
-                {auth.driverName}
-              </Text>
+              <Text style={styles.headerSubtitle}>{auth.driverName}</Text>
             ) : auth?.fullName ? (
-              <Text style={[styles.headerSubtitle, { color: colors.muted }]}>
-                {auth.fullName}
-              </Text>
+              <Text style={styles.headerSubtitle}>{auth.fullName}</Text>
             ) : null}
           </View>
           {!isOnline && (
-            <View style={[styles.offlineBadge, { backgroundColor: colors.warning }]}>
+            <View style={styles.offlineBadge}>
               <MaterialIcons name="cloud-off" size={14} color="#fff" />
               <Text style={styles.offlineBadgeText}>Offline</Text>
             </View>
           )}
         </View>
+      </LinearGradient>
 
-        {/* Search Bar */}
-        <View
-          style={[
-            styles.searchBar,
-            {
-              backgroundColor: colors.background,
-              borderColor: colors.border,
-            },
-          ]}
-        >
-          <MaterialIcons name="search" size={20} color={colors.muted} />
+      {/* Search + Filters on white */}
+      <View style={styles.filterArea}>
+        <View style={styles.searchBar}>
+          <MaterialIcons name="search" size={20} color="#8E8E93" />
           <TextInput
-            style={[styles.searchInput, { color: colors.foreground }]}
+            style={styles.searchInput}
             placeholder="Search by name, route, vehicle..."
-            placeholderTextColor={colors.muted}
+            placeholderTextColor="#C7C7CC"
             value={searchQuery}
             onChangeText={setSearchQuery}
             returnKeyType="search"
             clearButtonMode="while-editing"
           />
           {searchQuery.length > 0 && Platform.OS !== "ios" && (
-            <TouchableOpacity
-              onPress={() => setSearchQuery("")}
-              style={styles.clearButton}
-            >
-              <MaterialIcons name="close" size={18} color={colors.muted} />
+            <TouchableOpacity onPress={() => setSearchQuery("")} style={styles.clearButton}>
+              <MaterialIcons name="close" size={18} color="#8E8E93" />
             </TouchableOpacity>
           )}
         </View>
 
-        {/* Date Filter Pills */}
         <View style={styles.filterRow}>
           {filterOptions.map((opt) => {
             const isSelected = dateFilter === opt.key;
@@ -391,17 +315,15 @@ export default function RunSheetsScreen() {
                 style={[
                   styles.filterPill,
                   {
-                    backgroundColor: isSelected
-                      ? colors.primary
-                      : "transparent",
-                    borderColor: isSelected ? colors.primary : colors.border,
+                    backgroundColor: isSelected ? BLUE : "transparent",
+                    borderColor: isSelected ? BLUE : "#E5E5EA",
                   },
                 ]}
               >
                 <Text
                   style={[
                     styles.filterPillText,
-                    { color: isSelected ? "#fff" : colors.muted },
+                    { color: isSelected ? "#fff" : "#8E8E93" },
                   ]}
                 >
                   {opt.label}
@@ -410,7 +332,7 @@ export default function RunSheetsScreen() {
             );
           })}
           <View style={styles.filterCountContainer}>
-            <Text style={[styles.filterCountText, { color: colors.muted }]}>
+            <Text style={styles.filterCountText}>
               {filteredSheets.length} {filteredSheets.length === 1 ? "sheet" : "sheets"}
             </Text>
           </View>
@@ -421,10 +343,8 @@ export default function RunSheetsScreen() {
 
       {isLoading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.muted }]}>
-            Loading run sheets...
-          </Text>
+          <ActivityIndicator size="large" color={BLUE} />
+          <Text style={styles.loadingText}>Loading run sheets...</Text>
         </View>
       ) : (
         <FlatList
@@ -433,7 +353,7 @@ export default function RunSheetsScreen() {
           renderItem={renderItem}
           ListEmptyComponent={renderEmpty}
           contentContainerStyle={{
-            paddingTop: 12,
+            paddingTop: 8,
             paddingBottom: 32,
             flexGrow: filteredSheets.length === 0 ? 1 : undefined,
           }}
@@ -441,10 +361,11 @@ export default function RunSheetsScreen() {
             <RefreshControl
               refreshing={isRefreshing}
               onRefresh={() => loadData(true)}
-              tintColor={colors.primary}
+              tintColor={BLUE}
             />
           }
           showsVerticalScrollIndicator={false}
+          style={{ backgroundColor: "#FFFFFF" }}
         />
       )}
     </ScreenContainer>
@@ -452,25 +373,26 @@ export default function RunSheetsScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: {
+  // Header
+  gradientHeader: {
     paddingHorizontal: 20,
     paddingTop: 8,
-    paddingBottom: 14,
-    borderBottomWidth: 0.5,
+    paddingBottom: 16,
   },
   headerTop: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 14,
   },
   headerTitle: {
-    fontSize: 30,
+    fontSize: 26,
     fontWeight: "800",
+    color: "#FFFFFF",
     letterSpacing: -0.5,
   },
   headerSubtitle: {
     fontSize: 14,
+    color: "rgba(255,255,255,0.7)",
     marginTop: 2,
   },
   offlineBadge: {
@@ -480,19 +402,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 12,
+    backgroundColor: ORANGE,
   },
   offlineBadgeText: {
     color: "#fff",
     fontSize: 12,
     fontWeight: "600",
   },
+
+  // Filter area
+  filterArea: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 10,
+    backgroundColor: "#FFFFFF",
+  },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
     borderRadius: 12,
-    borderWidth: 1,
+    backgroundColor: "#F5F5F7",
     paddingHorizontal: 14,
-    height: 48,
+    height: 44,
     marginBottom: 12,
   },
   searchInput: {
@@ -500,6 +431,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     marginLeft: 10,
     paddingVertical: 0,
+    color: "#1A1A1A",
   },
   clearButton: {
     padding: 4,
@@ -526,12 +458,21 @@ const styles = StyleSheet.create({
   filterCountText: {
     fontSize: 12,
     fontWeight: "500",
+    color: "#8E8E93",
   },
+
+  // Cards
   card: {
-    borderRadius: 14,
+    borderRadius: 12,
     padding: 16,
     marginHorizontal: 16,
-    marginBottom: 10,
+    marginBottom: 8,
+    backgroundColor: "#FFFFFF",
+    ...Platform.select({
+      ios: { shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 6 },
+      android: { elevation: 2 },
+      web: { shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 6 },
+    }),
   },
   cardTopRow: {
     flexDirection: "row",
@@ -554,11 +495,13 @@ const styles = StyleSheet.create({
   cardId: {
     fontSize: 15,
     fontWeight: "700",
+    color: "#1A1A1A",
     flex: 1,
   },
   routeName: {
     fontSize: 14,
     fontWeight: "500",
+    color: "#1A1A1A",
     marginBottom: 10,
     marginTop: 2,
   },
@@ -573,6 +516,7 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
     overflow: "hidden",
+    backgroundColor: "#E5E5EA",
   },
   progressFill: {
     height: 6,
@@ -584,6 +528,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     minWidth: 52,
     textAlign: "right",
+    color: "#8E8E93",
   },
   cardInfoRow: {
     flexDirection: "row",
@@ -599,10 +544,13 @@ const styles = StyleSheet.create({
   infoText: {
     fontSize: 12,
     fontWeight: "500",
+    color: "#8E8E93",
   },
   cardArrow: {
     marginLeft: "auto",
   },
+
+  // Empty
   emptyContainer: {
     flex: 1,
     alignItems: "center",
@@ -611,19 +559,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   emptyIconCircle: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: "#F5F5F7",
     alignItems: "center",
     justifyContent: "center",
   },
   emptyTitle: {
     fontSize: 18,
     fontWeight: "700",
+    color: "#1A1A1A",
     marginTop: 16,
   },
   emptySubtitle: {
     fontSize: 14,
+    color: "#8E8E93",
     marginTop: 6,
     textAlign: "center",
     lineHeight: 20,
@@ -632,9 +583,11 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "#FFFFFF",
   },
   loadingText: {
     fontSize: 14,
+    color: "#8E8E93",
     marginTop: 12,
   },
 });

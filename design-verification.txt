@@ -1,0 +1,9 @@
+Design Verification - CargoNext Style
+- Blue gradient header: visible on Run Sheets screen
+- White body background: clean white content area
+- Blue active tab tint: "Run Sheets" tab is blue
+- Search bar with gray placeholder: present
+- Filter chips (Today, This Week, All): blue active state
+- Empty state with icon and text: matches CargoNext pattern
+- Tab bar: clean white with blue active tint
+- All screens updated: profile picker, login, run sheets, settings, run sheet detail, leg detail

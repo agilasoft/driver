@@ -10,6 +10,7 @@ import {
   Platform,
   Pressable,
   TouchableOpacity,
+  Dimensions,
 } from "react-native";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
@@ -24,6 +25,10 @@ import {
   checkBiometricAvailability,
   authenticateWithBiometric,
 } from "@/lib/profile-manager";
+
+const HEADER_BLUE = "#3478C6";
+const HEADER_BLUE_LIGHT = "#5B9BD5";
+const FAB_ORANGE = "#F27A2E";
 
 export default function ProfilePickerScreen() {
   const router = useRouter();
@@ -40,7 +45,6 @@ export default function ProfilePickerScreen() {
 
   const handleProfileTap = useCallback(
     async (profile: DriverProfile) => {
-      // If profile has no security, switch directly
       if (!profile.pin && !profile.useBiometric) {
         setIsAuthenticating(true);
         try {
@@ -54,7 +58,6 @@ export default function ProfilePickerScreen() {
         return;
       }
 
-      // Try biometric first if enabled
       if (profile.useBiometric) {
         const bio = await checkBiometricAvailability();
         if (bio.available) {
@@ -81,7 +84,6 @@ export default function ProfilePickerScreen() {
         }
       }
 
-      // Show PIN entry
       if (profile.pin) {
         setUnlockingProfile(profile);
         setPinInput("");
@@ -116,21 +118,11 @@ export default function ProfilePickerScreen() {
   }, [router]);
 
   const getHostname = (url: string) => {
-    try {
-      return new URL(url).hostname;
-    } catch {
-      return url;
-    }
+    try { return new URL(url).hostname; } catch { return url; }
   };
 
-  const getInitials = (name: string) => {
-    return (name || "?")
-      .split(" ")
-      .map((w) => w[0])
-      .join("")
-      .toUpperCase()
-      .substring(0, 2);
-  };
+  const getInitials = (name: string) =>
+    (name || "?").split(" ").map((w) => w[0]).join("").toUpperCase().substring(0, 2);
 
   const renderProfile = useCallback(
     ({ item }: { item: DriverProfile }) => {
@@ -144,17 +136,8 @@ export default function ProfilePickerScreen() {
           style={({ pressed }) => [
             styles.profileCard,
             {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              ...Platform.select({
-                ios: {
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: pressed ? 0.02 : 0.06,
-                  shadowRadius: 8,
-                },
-                android: { elevation: pressed ? 1 : 3 },
-              }),
+              backgroundColor: "#FFFFFF",
+              opacity: pressed ? 0.85 : 1,
               transform: [{ scale: pressed ? 0.98 : 1 }],
             },
           ]}
@@ -163,61 +146,45 @@ export default function ProfilePickerScreen() {
             <Text style={styles.avatarText}>{initials}</Text>
           </View>
           <View style={styles.profileInfo}>
-            <Text
-              style={[styles.profileName, { color: colors.foreground }]}
-              numberOfLines={1}
-            >
+            <Text style={styles.profileName} numberOfLines={1}>
               {item.fullName || item.userName}
             </Text>
-            <View style={styles.serverRow}>
-              <MaterialIcons name="dns" size={12} color={colors.muted} />
-              <Text
-                style={[styles.profileServer, { color: colors.muted }]}
-                numberOfLines={1}
-              >
-                {hostname}
-              </Text>
-            </View>
+            <Text style={styles.profileServer} numberOfLines={1}>
+              {hostname}
+            </Text>
             {item.driverName ? (
-              <View style={styles.driverRow}>
-                <MaterialIcons name="local-shipping" size={12} color={colors.primary} />
-                <Text
-                  style={[styles.profileDriver, { color: colors.primary }]}
-                  numberOfLines={1}
-                >
-                  {item.driverName}
-                </Text>
-              </View>
+              <Text style={[styles.profileDriver, { color: HEADER_BLUE }]} numberOfLines={1}>
+                {item.driverName}
+              </Text>
             ) : null}
           </View>
-          <View style={styles.cardRight}>
-            {hasLock ? (
-              <View style={[styles.lockIcon, { backgroundColor: colors.primary + "15" }]}>
-                <MaterialIcons
-                  name={item.useBiometric ? "fingerprint" : "lock"}
-                  size={18}
-                  color={colors.primary}
-                />
-              </View>
-            ) : null}
-            <MaterialIcons name="chevron-right" size={24} color={colors.border} />
-          </View>
+          {hasLock ? (
+            <View style={styles.lockIcon}>
+              <MaterialIcons
+                name={item.useBiometric ? "fingerprint" : "lock"}
+                size={18}
+                color={HEADER_BLUE}
+              />
+            </View>
+          ) : null}
+          <MaterialIcons name="chevron-right" size={22} color="#C7C7CC" />
         </Pressable>
       );
     },
-    [colors, handleProfileTap]
+    [handleProfileTap]
   );
 
   // PIN entry overlay
   if (unlockingProfile) {
     return (
       <ScreenContainer edges={["top", "bottom", "left", "right"]} className="flex-1">
-        <View style={[styles.pinOverlay, { backgroundColor: colors.background }]}>
+        <View style={styles.pinOverlay}>
+          {/* Blue header */}
           <LinearGradient
-            colors={["#0A3D7A", "#0F5FC6", "#3B82F6"]}
+            colors={[HEADER_BLUE, HEADER_BLUE_LIGHT]}
             start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.pinHeader}
+            end={{ x: 0, y: 1 }}
+            style={styles.pinGradientHeader}
           >
             <TouchableOpacity
               style={styles.pinBackBtn}
@@ -228,8 +195,10 @@ export default function ProfilePickerScreen() {
               }}
               activeOpacity={0.7}
             >
-              <MaterialIcons name="arrow-back" size={22} color="rgba(255,255,255,0.9)" />
+              <MaterialIcons name="arrow-back" size={22} color="#fff" />
             </TouchableOpacity>
+            <Text style={styles.pinHeaderTitle}>Unlock Profile</Text>
+            <View style={{ width: 40 }} />
           </LinearGradient>
 
           <View style={styles.pinContent}>
@@ -238,21 +207,15 @@ export default function ProfilePickerScreen() {
                 {getInitials(unlockingProfile.fullName || "?")}
               </Text>
             </View>
-            <Text style={[styles.pinTitle, { color: colors.foreground }]}>
+            <Text style={styles.pinTitle}>
               {unlockingProfile.fullName || unlockingProfile.userName}
             </Text>
-            <Text style={[styles.pinSubtitle, { color: colors.muted }]}>
-              Enter your PIN to unlock
-            </Text>
+            <Text style={styles.pinSubtitle}>Enter your PIN to unlock</Text>
 
             <TextInput
               style={[
                 styles.pinInput,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: pinError ? colors.error : colors.border,
-                  color: colors.foreground,
-                },
+                { borderColor: pinError ? "#FF3B30" : "#E5E5EA" },
               ]}
               value={pinInput}
               onChangeText={(text) => {
@@ -260,7 +223,7 @@ export default function ProfilePickerScreen() {
                 setPinError("");
               }}
               placeholder="- - - - - -"
-              placeholderTextColor={colors.border}
+              placeholderTextColor="#C7C7CC"
               keyboardType="number-pad"
               secureTextEntry
               maxLength={6}
@@ -270,23 +233,18 @@ export default function ProfilePickerScreen() {
             />
 
             {pinError ? (
-              <Text style={[styles.pinErrorText, { color: colors.error }]}>
-                {pinError}
-              </Text>
+              <Text style={styles.pinErrorText}>{pinError}</Text>
             ) : null}
 
             <TouchableOpacity
-              style={[styles.pinUnlockBtn, { backgroundColor: colors.primary }]}
+              style={[styles.pinUnlockBtn, { backgroundColor: HEADER_BLUE }]}
               onPress={handlePinSubmit}
               activeOpacity={0.8}
             >
               {isAuthenticating ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <>
-                  <MaterialIcons name="lock-open" size={20} color="#fff" />
-                  <Text style={styles.pinUnlockText}>Unlock</Text>
-                </>
+                <Text style={styles.pinUnlockText}>Unlock</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -299,7 +257,7 @@ export default function ProfilePickerScreen() {
     return (
       <ScreenContainer edges={["top", "bottom", "left", "right"]} className="flex-1">
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator size="large" color={HEADER_BLUE} />
         </View>
       </ScreenContainer>
     );
@@ -307,38 +265,26 @@ export default function ProfilePickerScreen() {
 
   return (
     <ScreenContainer edges={["top", "bottom", "left", "right"]} className="flex-1">
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        {/* Hero Header */}
+      <View style={styles.container}>
+        {/* Blue gradient header — matches CargoNext exactly */}
         <LinearGradient
-          colors={["#0A3D7A", "#0F5FC6", "#3B82F6"]}
+          colors={[HEADER_BLUE, HEADER_BLUE_LIGHT]}
           start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.heroHeader}
+          end={{ x: 0, y: 1 }}
+          style={styles.header}
         >
-          <View style={styles.heroContent}>
-            <View style={styles.heroLogoBox}>
-              <Image
-                source={require("@/assets/images/icon.png")}
-                style={{ width: 44, height: 44 }}
-                contentFit="contain"
-              />
-            </View>
-            <Text style={styles.heroTitle}>Driver</Text>
-            <Text style={styles.heroSubtitle}>Select your profile to continue</Text>
+          <View style={styles.headerLogoBox}>
+            <Image
+              source={require("@/assets/images/icon.png")}
+              style={{ width: 40, height: 40 }}
+              contentFit="contain"
+            />
           </View>
-          <View style={styles.heroCurve}>
-            <View style={[styles.heroCurveInner, { backgroundColor: colors.background }]} />
-          </View>
+          <Text style={styles.headerTitle}>Driver</Text>
+          <Text style={styles.headerSubtitle}>Select a host to connect</Text>
         </LinearGradient>
 
-        {/* Profiles Section */}
-        <View style={styles.sectionHeader}>
-          <MaterialIcons name="people" size={18} color={colors.muted} />
-          <Text style={[styles.sectionTitle, { color: colors.muted }]}>
-            DRIVER PROFILES ({profiles.length})
-          </Text>
-        </View>
-
+        {/* Body */}
         {profiles.length > 0 ? (
           <FlatList
             data={profiles.sort(
@@ -353,32 +299,29 @@ export default function ProfilePickerScreen() {
           />
         ) : (
           <View style={styles.emptyContainer}>
-            <View style={[styles.emptyIconCircle, { backgroundColor: colors.surface }]}>
-              <MaterialIcons name="person-add" size={40} color={colors.border} />
+            <View style={styles.emptyIconBox}>
+              <MaterialIcons name="dns" size={40} color="#C7C7CC" />
             </View>
-            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-              No Profiles Yet
-            </Text>
-            <Text style={[styles.emptySubtitle, { color: colors.muted }]}>
-              Add a driver profile to connect to your fleet server
+            <Text style={styles.emptyTitle}>No Hosts Added</Text>
+            <Text style={styles.emptySubtitle}>
+              Add a host to get started. You can add{"\n"}multiple hosts and switch between them.
             </Text>
           </View>
         )}
 
-        {/* Footer */}
-        <View style={styles.footer}>
-          <TouchableOpacity
-            style={[styles.addButton, { backgroundColor: colors.primary }]}
-            onPress={handleAddProfile}
-            activeOpacity={0.8}
-          >
-            <MaterialIcons name="add" size={22} color="#fff" />
-            <Text style={styles.addButtonText}>Add New Profile</Text>
-          </TouchableOpacity>
-          <Text style={[styles.branding, { color: colors.muted }]}>
-            Powered by Agilasoft Cloud Technologies Inc.
-          </Text>
-        </View>
+        {/* Branding footer */}
+        <Text style={styles.branding}>
+          Powered by Agilasoft Cloud Technologies Inc.
+        </Text>
+
+        {/* Orange FAB — matches CargoNext exactly */}
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={handleAddProfile}
+          activeOpacity={0.85}
+        >
+          <MaterialIcons name="add" size={28} color="#fff" />
+        </TouchableOpacity>
       </View>
 
       {isAuthenticating ? (
@@ -394,135 +337,110 @@ export default function ProfilePickerScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#FFFFFF",
   },
   center: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    backgroundColor: "#FFFFFF",
   },
 
-  // Hero Header
-  heroHeader: {
-    paddingTop: 16,
-    position: "relative",
-    overflow: "hidden",
-  },
-  heroContent: {
+  // Header
+  header: {
+    paddingTop: 20,
+    paddingBottom: 24,
     alignItems: "center",
-    paddingBottom: 32,
-    paddingHorizontal: 24,
   },
-  heroLogoBox: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
+  headerLogoBox: {
+    width: 56,
+    height: 56,
+    borderRadius: 14,
     backgroundColor: "rgba(255,255,255,0.2)",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 10,
+    marginBottom: 8,
   },
-  heroTitle: {
-    fontSize: 26,
-    fontWeight: "800",
-    color: "#fff",
-    letterSpacing: -0.5,
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    letterSpacing: -0.3,
   },
-  heroSubtitle: {
+  headerSubtitle: {
     fontSize: 14,
     color: "rgba(255,255,255,0.7)",
-    marginTop: 4,
-  },
-  heroCurve: {
-    height: 20,
-    overflow: "hidden",
-  },
-  heroCurveInner: {
-    height: 40,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-  },
-
-  // Section Header
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 24,
-    paddingTop: 4,
-    paddingBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: "700",
-    letterSpacing: 0.5,
+    marginTop: 2,
   },
 
   // Profile Cards
   listContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 16,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 100,
   },
   profileCard: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 16,
+    paddingVertical: 14,
     paddingHorizontal: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    marginBottom: 10,
+    borderRadius: 12,
+    marginBottom: 8,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.08,
+        shadowRadius: 6,
+      },
+      android: { elevation: 2 },
+      web: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.08,
+        shadowRadius: 6,
+      },
+    }),
   },
   avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: "center",
     alignItems: "center",
   },
   avatarText: {
     color: "#fff",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "700",
   },
   profileInfo: {
     flex: 1,
-    marginLeft: 14,
-    gap: 2,
+    marginLeft: 12,
   },
   profileName: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "600",
-  },
-  serverRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginTop: 2,
+    color: "#1A1A1A",
   },
   profileServer: {
     fontSize: 13,
-  },
-  driverRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginTop: 2,
+    color: "#8E8E93",
+    marginTop: 1,
   },
   profileDriver: {
     fontSize: 12,
     fontWeight: "500",
-  },
-  cardRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginLeft: 8,
+    marginTop: 1,
   },
   lockIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: "rgba(52,120,198,0.1)",
     alignItems: "center",
     justifyContent: "center",
+    marginRight: 6,
   },
 
   // Empty State
@@ -532,68 +450,91 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 40,
   },
-  emptyIconCircle: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+  emptyIconBox: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "#F5F5F7",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 16,
   },
   emptyTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "700",
+    color: "#1A1A1A",
     textAlign: "center",
   },
   emptySubtitle: {
     fontSize: 14,
+    color: "#8E8E93",
     textAlign: "center",
     marginTop: 8,
     lineHeight: 20,
   },
 
-  // Footer
-  footer: {
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    paddingTop: 8,
-  },
-  addButton: {
-    flexDirection: "row",
-    height: 52,
-    borderRadius: 14,
-    justifyContent: "center",
+  // FAB
+  fab: {
+    position: "absolute",
+    bottom: 48,
+    right: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: FAB_ORANGE,
     alignItems: "center",
-    gap: 8,
+    justifyContent: "center",
+    ...Platform.select({
+      ios: {
+        shadowColor: FAB_ORANGE,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.35,
+        shadowRadius: 8,
+      },
+      android: { elevation: 6 },
+      web: {
+        shadowColor: FAB_ORANGE,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.35,
+        shadowRadius: 8,
+      },
+    }),
   },
-  addButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "700",
-  },
+
+  // Branding
   branding: {
     textAlign: "center",
     fontSize: 11,
-    paddingTop: 16,
-    paddingBottom: 4,
+    color: "#8E8E93",
+    paddingBottom: 20,
+    paddingTop: 8,
   },
 
   // PIN Overlay
   pinOverlay: {
     flex: 1,
+    backgroundColor: "#FFFFFF",
   },
-  pinHeader: {
+  pinGradientHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingTop: 8,
-    paddingBottom: 24,
-    paddingHorizontal: 20,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
   },
   pinBackBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.15)",
+    backgroundColor: "rgba(255,255,255,0.2)",
     alignItems: "center",
     justifyContent: "center",
+  },
+  pinHeaderTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#fff",
   },
   pinContent: {
     flex: 1,
@@ -615,40 +556,43 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   pinTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "700",
+    color: "#1A1A1A",
     textAlign: "center",
   },
   pinSubtitle: {
     fontSize: 15,
+    color: "#8E8E93",
     marginTop: 6,
     marginBottom: 28,
   },
   pinInput: {
     width: "100%",
     height: 56,
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1.5,
+    backgroundColor: "#F5F5F7",
     paddingHorizontal: 20,
     fontSize: 28,
     textAlign: "center",
     letterSpacing: 10,
     fontWeight: "600",
+    color: "#1A1A1A",
   },
   pinErrorText: {
     fontSize: 13,
+    color: "#FF3B30",
     marginTop: 10,
     fontWeight: "500",
   },
   pinUnlockBtn: {
-    flexDirection: "row",
     width: "100%",
-    height: 52,
-    borderRadius: 14,
+    height: 50,
+    borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
     marginTop: 24,
-    gap: 8,
   },
   pinUnlockText: {
     color: "#fff",

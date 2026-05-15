@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -10,24 +10,22 @@ import {
   ScrollView,
   Alert,
   StyleSheet,
-  Animated,
-  Dimensions,
 } from "react-native";
 import { Image } from "expo-image";
 import { ScreenContainer } from "@/components/screen-container";
 import { useAuth } from "@/lib/auth-context";
-import { useColors } from "@/hooks/use-colors";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { LinearGradient } from "expo-linear-gradient";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const HEADER_BLUE = "#3478C6";
+const HEADER_BLUE_LIGHT = "#5B9BD5";
+const FAB_ORANGE = "#F27A2E";
 
 type Step = "connect" | "credentials";
 
 export default function LoginScreen() {
   const { login, profiles } = useAuth();
-  const colors = useColors();
   const router = useRouter();
   const params = useLocalSearchParams<{
     scannedSiteUrl?: string;
@@ -42,26 +40,14 @@ export default function LoginScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [showSecret, setShowSecret] = useState(false);
 
-  // Animation for step transitions
-  const slideAnim = useRef(new Animated.Value(0)).current;
-
   useEffect(() => {
     if (params.scannedSiteUrl && params.scannedApiKey && params.scannedApiSecret) {
       setSiteUrl(params.scannedSiteUrl);
       setApiKey(params.scannedApiKey);
       setApiSecret(params.scannedApiSecret);
-      // Auto-advance to credentials step if all fields scanned
       setStep("credentials");
     }
   }, [params.scannedSiteUrl, params.scannedApiKey, params.scannedApiSecret]);
-
-  useEffect(() => {
-    Animated.timing(slideAnim, {
-      toValue: step === "connect" ? 0 : 1,
-      duration: 250,
-      useNativeDriver: true,
-    }).start();
-  }, [step, slideAnim]);
 
   const handleNext = () => {
     if (!siteUrl.trim()) {
@@ -98,35 +84,6 @@ export default function LoginScreen() {
     router.push({ pathname: "/config-scanner", params: { source: "login" } });
   };
 
-  const stepIndicator = (
-    <View style={s.stepRow}>
-      <View style={s.stepItem}>
-        <View style={[s.stepCircle, { backgroundColor: colors.primary }]}>
-          {step === "credentials" ? (
-            <MaterialIcons name="check" size={16} color="#fff" />
-          ) : (
-            <Text style={s.stepNumber}>1</Text>
-          )}
-        </View>
-        <Text style={[s.stepLabel, { color: step === "connect" ? colors.primary : colors.success }]}>
-          Connect
-        </Text>
-      </View>
-      <View style={[s.stepLine, { backgroundColor: step === "credentials" ? colors.primary : colors.border }]} />
-      <View style={s.stepItem}>
-        <View style={[
-          s.stepCircle,
-          { backgroundColor: step === "credentials" ? colors.primary : colors.border },
-        ]}>
-          <Text style={[s.stepNumber, { color: step === "credentials" ? "#fff" : colors.muted }]}>2</Text>
-        </View>
-        <Text style={[s.stepLabel, { color: step === "credentials" ? colors.primary : colors.muted }]}>
-          Sign In
-        </Text>
-      </View>
-    </View>
-  );
-
   return (
     <ScreenContainer edges={["top", "bottom", "left", "right"]}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
@@ -134,203 +91,184 @@ export default function LoginScreen() {
           contentContainerStyle={{ flexGrow: 1 }}
           keyboardShouldPersistTaps="handled"
           bounces={false}
+          style={{ backgroundColor: "#FFFFFF" }}
         >
-          {/* Hero Header with Gradient */}
+          {/* Blue gradient header */}
           <LinearGradient
-            colors={["#0A3D7A", "#0F5FC6", "#3B82F6"]}
+            colors={[HEADER_BLUE, HEADER_BLUE_LIGHT]}
             start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={s.heroHeader}
+            end={{ x: 0, y: 1 }}
+            style={s.header}
           >
-            <View style={s.heroContent}>
-              {/* Back to profiles */}
-              {profiles.length > 0 ? (
-                <TouchableOpacity
-                  style={s.backBtn}
-                  onPress={() => router.back()}
-                  activeOpacity={0.7}
-                >
-                  <MaterialIcons name="arrow-back" size={22} color="rgba(255,255,255,0.9)" />
-                </TouchableOpacity>
-              ) : <View style={{ height: 40 }} />}
+            {profiles.length > 0 ? (
+              <TouchableOpacity
+                style={s.backBtn}
+                onPress={() => router.back()}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons name="arrow-back" size={22} color="#fff" />
+              </TouchableOpacity>
+            ) : <View style={{ height: 40 }} />}
 
-              <View style={s.heroLogoRow}>
-                <View style={s.heroLogoBox}>
-                  <Image
-                    source={require("@/assets/images/icon.png")}
-                    style={{ width: 52, height: 52 }}
-                    contentFit="contain"
-                  />
-                </View>
-              </View>
-              <Text style={s.heroTitle}>Driver</Text>
-              <Text style={s.heroSubtitle}>CargoNext Logistics Platform</Text>
+            <View style={s.headerLogoBox}>
+              <Image
+                source={require("@/assets/images/icon.png")}
+                style={{ width: 40, height: 40 }}
+                contentFit="contain"
+              />
             </View>
-
-            {/* Curved bottom edge */}
-            <View style={s.heroCurve}>
-              <View style={[s.heroCurveInner, { backgroundColor: colors.background }]} />
-            </View>
+            <Text style={s.headerTitle}>
+              {step === "connect" ? "Add Host" : "Sign In"}
+            </Text>
+            <Text style={s.headerSubtitle}>
+              {step === "connect"
+                ? "Connect to your Frappe server"
+                : "Enter your API credentials"}
+            </Text>
           </LinearGradient>
 
-          {/* Step Indicator */}
-          <View style={[s.stepContainer, { backgroundColor: colors.background }]}>
-            {stepIndicator}
+          {/* Step indicator */}
+          <View style={s.stepContainer}>
+            <View style={s.stepRow}>
+              <View style={s.stepItem}>
+                <View style={[s.stepDot, { backgroundColor: HEADER_BLUE }]}>
+                  {step === "credentials" ? (
+                    <MaterialIcons name="check" size={14} color="#fff" />
+                  ) : (
+                    <Text style={s.stepDotText}>1</Text>
+                  )}
+                </View>
+                <Text style={[s.stepLabel, { color: HEADER_BLUE }]}>Connect</Text>
+              </View>
+              <View style={[s.stepLine, { backgroundColor: step === "credentials" ? HEADER_BLUE : "#E5E5EA" }]} />
+              <View style={s.stepItem}>
+                <View style={[s.stepDot, { backgroundColor: step === "credentials" ? HEADER_BLUE : "#E5E5EA" }]}>
+                  <Text style={[s.stepDotText, { color: step === "credentials" ? "#fff" : "#8E8E93" }]}>2</Text>
+                </View>
+                <Text style={[s.stepLabel, { color: step === "credentials" ? HEADER_BLUE : "#8E8E93" }]}>Sign In</Text>
+              </View>
+            </View>
           </View>
 
-          {/* Form Card */}
-          <View style={[s.formCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          {/* Form area */}
+          <View style={s.formArea}>
             {step === "connect" ? (
               <>
-                <Text style={[s.formTitle, { color: colors.foreground }]}>
-                  Connect to Server
-                </Text>
-                <Text style={[s.formDesc, { color: colors.muted }]}>
-                  Enter your Frappe/ERPNext server URL or scan a QR code to configure automatically.
-                </Text>
-
-                {/* Scan QR Button */}
+                {/* Scan QR Card */}
                 <TouchableOpacity
-                  style={[s.scanQrBtn, { borderColor: colors.primary + "40", backgroundColor: colors.primary + "08" }]}
+                  style={s.scanCard}
                   onPress={handleScanQR}
                   activeOpacity={0.7}
                 >
-                  <View style={[s.scanQrIcon, { backgroundColor: colors.primary + "15" }]}>
-                    <MaterialIcons name="qr-code-scanner" size={28} color={colors.primary} />
+                  <View style={s.scanIconBox}>
+                    <MaterialIcons name="qr-code-scanner" size={28} color={HEADER_BLUE} />
                   </View>
-                  <View style={s.scanQrTextArea}>
-                    <Text style={[s.scanQrTitle, { color: colors.primary }]}>Scan QR Code</Text>
-                    <Text style={[s.scanQrDesc, { color: colors.muted }]}>
-                      Quick setup with configuration QR
-                    </Text>
+                  <View style={s.scanTextArea}>
+                    <Text style={s.scanTitle}>Scan QR Code</Text>
+                    <Text style={s.scanDesc}>Quick setup with configuration QR</Text>
                   </View>
-                  <MaterialIcons name="chevron-right" size={24} color={colors.primary} />
+                  <MaterialIcons name="chevron-right" size={22} color="#C7C7CC" />
                 </TouchableOpacity>
 
                 {/* Divider */}
-                <View style={s.orDivider}>
-                  <View style={[s.orLine, { backgroundColor: colors.border }]} />
-                  <Text style={[s.orText, { color: colors.muted }]}>or enter manually</Text>
-                  <View style={[s.orLine, { backgroundColor: colors.border }]} />
+                <View style={s.divider}>
+                  <View style={s.dividerLine} />
+                  <Text style={s.dividerText}>or enter manually</Text>
+                  <View style={s.dividerLine} />
                 </View>
 
-                {/* Server URL Field */}
-                <View style={s.fieldGroup}>
-                  <Text style={[s.fieldLabel, { color: colors.foreground }]}>Server URL</Text>
-                  <View style={[s.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                    <MaterialIcons name="dns" size={20} color={colors.muted} style={{ marginRight: 10 }} />
-                    <TextInput
-                      style={[s.input, { color: colors.foreground }]}
-                      placeholder="erp.yourcompany.com"
-                      placeholderTextColor={colors.muted}
-                      value={siteUrl}
-                      onChangeText={setSiteUrl}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      keyboardType="url"
-                      returnKeyType="done"
-                      onSubmitEditing={handleNext}
-                    />
-                  </View>
-                  <Text style={[s.fieldHint, { color: colors.muted }]}>
-                    The URL of your Frappe or ERPNext instance
-                  </Text>
+                {/* Server URL */}
+                <Text style={s.fieldLabel}>Server URL</Text>
+                <View style={s.inputRow}>
+                  <MaterialIcons name="dns" size={20} color="#8E8E93" style={{ marginRight: 10 }} />
+                  <TextInput
+                    style={s.input}
+                    placeholder="erp.yourcompany.com"
+                    placeholderTextColor="#C7C7CC"
+                    value={siteUrl}
+                    onChangeText={setSiteUrl}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="url"
+                    returnKeyType="done"
+                    onSubmitEditing={handleNext}
+                  />
                 </View>
+                <Text style={s.fieldHint}>The URL of your Frappe or ERPNext instance</Text>
 
-                {/* Next Button */}
+                {/* Continue button */}
                 <TouchableOpacity
-                  style={[s.primaryBtn, { backgroundColor: colors.primary }]}
+                  style={[s.primaryBtn, { backgroundColor: HEADER_BLUE }]}
                   onPress={handleNext}
                   activeOpacity={0.8}
                 >
                   <Text style={s.primaryBtnText}>Continue</Text>
-                  <MaterialIcons name="arrow-forward" size={20} color="#fff" />
+                  <MaterialIcons name="arrow-forward" size={18} color="#fff" />
                 </TouchableOpacity>
               </>
             ) : (
               <>
                 {/* Server badge */}
                 <TouchableOpacity
-                  style={[s.serverBadge, { backgroundColor: colors.primary + "10", borderColor: colors.primary + "30" }]}
+                  style={s.serverBadge}
                   onPress={handleBack}
                   activeOpacity={0.7}
                 >
-                  <MaterialIcons name="dns" size={16} color={colors.primary} />
-                  <Text style={[s.serverBadgeText, { color: colors.primary }]} numberOfLines={1}>
-                    {siteUrl}
-                  </Text>
-                  <MaterialIcons name="edit" size={14} color={colors.primary} />
+                  <MaterialIcons name="dns" size={16} color={HEADER_BLUE} />
+                  <Text style={s.serverBadgeText} numberOfLines={1}>{siteUrl}</Text>
+                  <MaterialIcons name="edit" size={14} color={HEADER_BLUE} />
                 </TouchableOpacity>
 
-                <Text style={[s.formTitle, { color: colors.foreground }]}>
-                  Sign In
-                </Text>
-                <Text style={[s.formDesc, { color: colors.muted }]}>
-                  Enter your API credentials to authenticate with the server.
-                </Text>
-
-                {/* API Key Field */}
-                <View style={s.fieldGroup}>
-                  <Text style={[s.fieldLabel, { color: colors.foreground }]}>API Key</Text>
-                  <View style={[s.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                    <MaterialIcons name="vpn-key" size={20} color={colors.muted} style={{ marginRight: 10 }} />
-                    <TextInput
-                      style={[s.input, { color: colors.foreground }]}
-                      placeholder="Your API key"
-                      placeholderTextColor={colors.muted}
-                      value={apiKey}
-                      onChangeText={setApiKey}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      returnKeyType="next"
-                    />
-                  </View>
+                {/* API Key */}
+                <Text style={s.fieldLabel}>API Key</Text>
+                <View style={s.inputRow}>
+                  <MaterialIcons name="vpn-key" size={20} color="#8E8E93" style={{ marginRight: 10 }} />
+                  <TextInput
+                    style={s.input}
+                    placeholder="Your API key"
+                    placeholderTextColor="#C7C7CC"
+                    value={apiKey}
+                    onChangeText={setApiKey}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    returnKeyType="next"
+                  />
                 </View>
 
-                {/* API Secret Field */}
-                <View style={s.fieldGroup}>
-                  <Text style={[s.fieldLabel, { color: colors.foreground }]}>API Secret</Text>
-                  <View style={[s.inputWrapper, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                    <MaterialIcons name="lock" size={20} color={colors.muted} style={{ marginRight: 10 }} />
-                    <TextInput
-                      style={[s.input, { color: colors.foreground }]}
-                      placeholder="Your API secret"
-                      placeholderTextColor={colors.muted}
-                      value={apiSecret}
-                      onChangeText={setApiSecret}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      secureTextEntry={!showSecret}
-                      returnKeyType="done"
-                      onSubmitEditing={handleLogin}
-                    />
-                    <TouchableOpacity
-                      onPress={() => setShowSecret(!showSecret)}
-                      style={s.eyeBtn}
-                      activeOpacity={0.7}
-                    >
-                      <MaterialIcons
-                        name={showSecret ? "visibility-off" : "visibility"}
-                        size={22}
-                        color={colors.muted}
-                      />
-                    </TouchableOpacity>
-                  </View>
+                {/* API Secret */}
+                <Text style={[s.fieldLabel, { marginTop: 16 }]}>API Secret</Text>
+                <View style={s.inputRow}>
+                  <MaterialIcons name="lock" size={20} color="#8E8E93" style={{ marginRight: 10 }} />
+                  <TextInput
+                    style={s.input}
+                    placeholder="Your API secret"
+                    placeholderTextColor="#C7C7CC"
+                    value={apiSecret}
+                    onChangeText={setApiSecret}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    secureTextEntry={!showSecret}
+                    returnKeyType="done"
+                    onSubmitEditing={handleLogin}
+                  />
+                  <TouchableOpacity onPress={() => setShowSecret(!showSecret)} style={{ padding: 6 }}>
+                    <MaterialIcons name={showSecret ? "visibility-off" : "visibility"} size={22} color="#8E8E93" />
+                  </TouchableOpacity>
                 </View>
 
-                {/* Actions */}
+                {/* Action buttons */}
                 <View style={s.actionRow}>
                   <TouchableOpacity
-                    style={[s.secondaryBtn, { borderColor: colors.border }]}
+                    style={s.backStepBtn}
                     onPress={handleBack}
                     activeOpacity={0.7}
                   >
-                    <MaterialIcons name="arrow-back" size={18} color={colors.muted} />
-                    <Text style={[s.secondaryBtnText, { color: colors.muted }]}>Back</Text>
+                    <MaterialIcons name="arrow-back" size={18} color="#8E8E93" />
+                    <Text style={s.backStepText}>Back</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[s.primaryBtn, s.primaryBtnFlex, { backgroundColor: colors.primary, opacity: isLoading ? 0.7 : 1 }]}
+                    style={[s.primaryBtn, s.primaryBtnFlex, { backgroundColor: HEADER_BLUE, opacity: isLoading ? 0.7 : 1 }]}
                     onPress={handleLogin}
                     disabled={isLoading}
                     activeOpacity={0.8}
@@ -346,7 +284,7 @@ export default function LoginScreen() {
                   </TouchableOpacity>
                 </View>
 
-                <Text style={[s.fieldHint, { color: colors.muted, textAlign: "center", marginTop: 8 }]}>
+                <Text style={s.hint}>
                   Generate API keys from User Settings in your ERPNext site.
                 </Text>
               </>
@@ -354,9 +292,7 @@ export default function LoginScreen() {
           </View>
 
           {/* Branding */}
-          <Text style={[s.branding, { color: colors.muted }]}>
-            Powered by Agilasoft Cloud Technologies Inc.
-          </Text>
+          <Text style={s.branding}>Powered by Agilasoft Cloud Technologies Inc.</Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </ScreenContainer>
@@ -364,65 +300,48 @@ export default function LoginScreen() {
 }
 
 const s = StyleSheet.create({
-  // Hero Header
-  heroHeader: {
+  // Header
+  header: {
     paddingTop: 8,
-    paddingBottom: 0,
-    position: "relative",
-    overflow: "hidden",
-  },
-  heroContent: {
+    paddingBottom: 24,
+    alignItems: "center",
     paddingHorizontal: 24,
-    paddingBottom: 40,
   },
   backBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 12,
-  },
-  heroLogoRow: {
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  heroLogoBox: {
-    width: 76,
-    height: 76,
-    borderRadius: 20,
     backgroundColor: "rgba(255,255,255,0.2)",
     alignItems: "center",
     justifyContent: "center",
+    alignSelf: "flex-start",
+    marginBottom: 8,
   },
-  heroTitle: {
-    fontSize: 30,
-    fontWeight: "800",
-    color: "#fff",
-    textAlign: "center",
-    letterSpacing: -0.5,
+  headerLogoBox: {
+    width: 56,
+    height: 56,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
   },
-  heroSubtitle: {
-    fontSize: 15,
-    color: "rgba(255,255,255,0.75)",
-    textAlign: "center",
-    marginTop: 4,
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
-  heroCurve: {
-    height: 24,
-    overflow: "hidden",
-  },
-  heroCurveInner: {
-    height: 48,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+  headerSubtitle: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.7)",
+    marginTop: 2,
   },
 
-  // Step Indicator
+  // Steps
   stepContainer: {
     paddingHorizontal: 48,
-    paddingBottom: 20,
+    paddingVertical: 20,
+    backgroundColor: "#FFFFFF",
   },
   stepRow: {
     flexDirection: "row",
@@ -431,18 +350,18 @@ const s = StyleSheet.create({
   },
   stepItem: {
     alignItems: "center",
-    gap: 6,
+    gap: 4,
   },
-  stepCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  stepDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
   },
-  stepNumber: {
+  stepDotText: {
     color: "#fff",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "700",
   },
   stepLabel: {
@@ -454,113 +373,98 @@ const s = StyleSheet.create({
     height: 2,
     borderRadius: 1,
     marginHorizontal: 16,
-    marginBottom: 20,
+    marginBottom: 18,
   },
 
-  // Form Card
-  formCard: {
-    marginHorizontal: 20,
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 24,
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.08,
-        shadowRadius: 16,
-      },
-      android: { elevation: 4 },
-    }),
+  // Form
+  formArea: {
+    flex: 1,
+    paddingHorizontal: 20,
+    backgroundColor: "#FFFFFF",
   },
-  formTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    marginBottom: 6,
-  },
-  formDesc: {
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 20,
-  },
-
-  // QR Scan
-  scanQrBtn: {
+  scanCard: {
     flexDirection: "row",
     alignItems: "center",
     padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
     marginBottom: 20,
-    gap: 14,
+    ...Platform.select({
+      ios: { shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 6 },
+      android: { elevation: 2 },
+      web: { shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 6 },
+    }),
   },
-  scanQrIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
+  scanIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: "rgba(52,120,198,0.08)",
     alignItems: "center",
     justifyContent: "center",
+    marginRight: 14,
   },
-  scanQrTextArea: {
+  scanTextArea: {
     flex: 1,
   },
-  scanQrTitle: {
+  scanTitle: {
     fontSize: 16,
-    fontWeight: "700",
+    fontWeight: "600",
+    color: "#1A1A1A",
   },
-  scanQrDesc: {
+  scanDesc: {
     fontSize: 13,
+    color: "#8E8E93",
     marginTop: 2,
   },
 
   // Divider
-  orDivider: {
+  divider: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
     marginBottom: 20,
   },
-  orLine: {
+  dividerLine: {
     flex: 1,
     height: 0.5,
+    backgroundColor: "#E5E5EA",
   },
-  orText: {
+  dividerText: {
     fontSize: 13,
     fontWeight: "500",
+    color: "#8E8E93",
   },
 
   // Fields
-  fieldGroup: {
-    marginBottom: 16,
-  },
   fieldLabel: {
     fontSize: 14,
     fontWeight: "600",
+    color: "#1A1A1A",
     marginBottom: 8,
     marginLeft: 2,
   },
-  inputWrapper: {
+  inputRow: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
+    borderColor: "#E5E5EA",
+    backgroundColor: "#F5F5F7",
     paddingHorizontal: 14,
-    height: 52,
+    height: 50,
   },
   input: {
     flex: 1,
     fontSize: 15,
+    color: "#1A1A1A",
     paddingVertical: 0,
   },
   fieldHint: {
     fontSize: 12,
+    color: "#8E8E93",
     marginTop: 6,
     marginLeft: 2,
-    lineHeight: 17,
-  },
-  eyeBtn: {
-    padding: 6,
-    marginLeft: 4,
   },
 
   // Server badge
@@ -570,14 +474,17 @@ const s = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 12,
+    borderRadius: 10,
+    backgroundColor: "rgba(52,120,198,0.06)",
     borderWidth: 1,
-    marginBottom: 16,
+    borderColor: "rgba(52,120,198,0.15)",
+    marginBottom: 20,
   },
   serverBadgeText: {
     flex: 1,
     fontSize: 14,
     fontWeight: "600",
+    color: HEADER_BLUE,
   },
 
   // Buttons
@@ -586,9 +493,9 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    borderRadius: 14,
-    paddingVertical: 16,
-    marginTop: 8,
+    borderRadius: 12,
+    paddingVertical: 15,
+    marginTop: 20,
   },
   primaryBtnFlex: {
     flex: 1,
@@ -598,30 +505,40 @@ const s = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
   },
-  secondaryBtn: {
+  backStepBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
-    paddingVertical: 16,
+    borderColor: "#E5E5EA",
+    paddingVertical: 15,
     paddingHorizontal: 20,
   },
-  secondaryBtnText: {
+  backStepText: {
     fontSize: 15,
     fontWeight: "600",
+    color: "#8E8E93",
   },
   actionRow: {
     flexDirection: "row",
     gap: 12,
-    marginTop: 8,
+    marginTop: 20,
+  },
+  hint: {
+    fontSize: 12,
+    color: "#8E8E93",
+    textAlign: "center",
+    marginTop: 16,
+    lineHeight: 18,
   },
 
   // Branding
   branding: {
     textAlign: "center",
     fontSize: 11,
+    color: "#8E8E93",
     paddingVertical: 24,
   },
 });

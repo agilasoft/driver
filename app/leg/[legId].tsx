@@ -18,7 +18,6 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import * as ImagePicker from "expo-image-picker";
 import { ScreenContainer } from "@/components/screen-container";
 import { StatusBadge } from "@/components/status-badge";
-import { useColors } from "@/hooks/use-colors";
 import { useSync } from "@/lib/sync-context";
 import { useLocationCapture, type GpsCoords } from "@/hooks/use-location";
 import type { TransportLeg, PendingChange } from "@/lib/types";
@@ -28,6 +27,15 @@ import {
   addPendingChange,
 } from "@/lib/offline-store";
 
+const BLUE = "#3478C6";
+const ORANGE = "#F27A2E";
+const GREEN = "#34C759";
+const RED = "#FF3B30";
+const GRAY = "#8E8E93";
+const BORDER = "#E5E5EA";
+const SURFACE = "#F5F5F7";
+const FG = "#1A1A1A";
+
 interface BarcodeRecord {
   data: string;
   barcodeType: string;
@@ -35,12 +43,8 @@ interface BarcodeRecord {
 }
 
 export default function LegDetailScreen() {
-  const { legId, runSheetId } = useLocalSearchParams<{
-    legId: string;
-    runSheetId: string;
-  }>();
+  const { legId, runSheetId } = useLocalSearchParams<{ legId: string; runSheetId: string }>();
   const router = useRouter();
-  const colors = useColors();
   const { refreshPendingCount } = useSync();
   const { captureLocation, isCapturing } = useLocationCapture();
 
@@ -48,7 +52,6 @@ export default function LegDetailScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Local editable state
   const [pickSignedBy, setPickSignedBy] = useState("");
   const [dropSignedBy, setDropSignedBy] = useState("");
   const [pickSignature, setPickSignature] = useState("");
@@ -229,9 +232,9 @@ export default function LegDetailScreen() {
   if (isLoading) {
     return (
       <>
-        <Stack.Screen options={{ title: "Leg Detail", headerBackTitle: "Back", headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.primary, headerTitleStyle: { color: colors.foreground } }} />
-        <ScreenContainer edges={["left", "right"]}>
-          <View style={s.center}><ActivityIndicator size="large" color={colors.primary} /></View>
+        <Stack.Screen options={{ title: "Leg Detail", headerBackTitle: "Back", headerStyle: { backgroundColor: BLUE }, headerTintColor: "#FFFFFF", headerTitleStyle: { color: "#FFFFFF" } }} />
+        <ScreenContainer edges={["left", "right"]} containerClassName="bg-white">
+          <View style={st.center}><ActivityIndicator size="large" color={BLUE} /></View>
         </ScreenContainer>
       </>
     );
@@ -240,9 +243,9 @@ export default function LegDetailScreen() {
   if (!leg) {
     return (
       <>
-        <Stack.Screen options={{ title: "Leg Detail", headerBackTitle: "Back", headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.primary, headerTitleStyle: { color: colors.foreground } }} />
-        <ScreenContainer edges={["left", "right"]}>
-          <View style={s.center}><Text style={{ color: colors.muted, fontSize: 15 }}>Leg not found</Text></View>
+        <Stack.Screen options={{ title: "Leg Detail", headerBackTitle: "Back", headerStyle: { backgroundColor: BLUE }, headerTintColor: "#FFFFFF", headerTitleStyle: { color: "#FFFFFF" } }} />
+        <ScreenContainer edges={["left", "right"]} containerClassName="bg-white">
+          <View style={st.center}><Text style={{ color: GRAY, fontSize: 15 }}>Leg not found</Text></View>
         </ScreenContainer>
       </>
     );
@@ -250,176 +253,122 @@ export default function LegDetailScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: leg.name, headerBackTitle: "Back", headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.primary, headerTitleStyle: { color: colors.foreground, fontSize: 17, fontWeight: "600" } }} />
-      <ScreenContainer edges={["left", "right"]}>
-        <ScrollView contentContainerStyle={{ paddingBottom: 110 }}>
+      <Stack.Screen options={{ title: leg.name, headerBackTitle: "Back", headerStyle: { backgroundColor: BLUE }, headerTintColor: "#FFFFFF", headerTitleStyle: { color: "#FFFFFF", fontSize: 17, fontWeight: "600" } }} />
+      <ScreenContainer edges={["left", "right"]} containerClassName="bg-white">
+        <ScrollView contentContainerStyle={{ paddingBottom: 110 }} style={{ backgroundColor: "#FFFFFF" }}>
           {/* Leg Header Card */}
-          <View style={s.section}>
-            <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <View style={s.cardHeaderRow}>
-                <Text style={[s.cardTitle, { color: colors.foreground }]} numberOfLines={1}>{leg.name}</Text>
+          <View style={st.section}>
+            <View style={st.card}>
+              <View style={st.cardHeaderRow}>
+                <Text style={st.cardTitle} numberOfLines={1}>{leg.name}</Text>
                 <StatusBadge status={leg.status} />
               </View>
 
-              {/* Route visualization */}
-              <View style={s.routeViz}>
-                <View style={s.routePoint}>
-                  <MaterialIcons name="trip-origin" size={18} color={colors.success} />
-                  <Text style={[s.routeText, { color: colors.foreground }]} numberOfLines={2}>
-                    {leg.facility_from || "Pick-up location"}
-                  </Text>
+              <View style={st.routeViz}>
+                <View style={st.routePoint}>
+                  <MaterialIcons name="trip-origin" size={18} color={GREEN} />
+                  <Text style={st.routeText} numberOfLines={2}>{leg.facility_from || "Pick-up location"}</Text>
                 </View>
-                <View style={[s.routeLine, { borderLeftColor: colors.border }]} />
-                <View style={s.routePoint}>
-                  <MaterialIcons name="place" size={18} color={colors.error} />
-                  <Text style={[s.routeText, { color: colors.foreground }]} numberOfLines={2}>
-                    {leg.facility_to || "Drop-off location"}
-                  </Text>
+                <View style={st.routeLine} />
+                <View style={st.routePoint}>
+                  <MaterialIcons name="place" size={18} color={RED} />
+                  <Text style={st.routeText} numberOfLines={2}>{leg.facility_to || "Drop-off location"}</Text>
                 </View>
               </View>
 
               {leg.transport_job ? (
-                <View style={s.jobRow}>
-                  <MaterialIcons name="work" size={16} color={colors.muted} />
-                  <Text style={[s.jobText, { color: colors.muted }]}>Job: {leg.transport_job}</Text>
+                <View style={st.jobRow}>
+                  <MaterialIcons name="work" size={16} color={GRAY} />
+                  <Text style={st.jobText}>Job: {leg.transport_job}</Text>
                 </View>
               ) : null}
             </View>
           </View>
 
           {/* PICK-UP SECTION */}
-          <SectionHeader title="Pick-up" icon="trip-origin" iconColor={colors.success} colors={colors} />
-          <View style={s.section}>
-            <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              {/* Timestamp */}
+          <SectionHeader title="Pick-up" icon="trip-origin" iconColor={GREEN} />
+          <View style={st.section}>
+            <View style={st.card}>
               <FieldLabel label="Timestamp" />
-              <View style={s.timestampRow}>
-                <View style={[s.timestampDisplay, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                  <MaterialIcons name="schedule" size={18} color={pickTimestamp ? colors.success : colors.muted} />
-                  <Text style={[s.timestampText, { color: pickTimestamp ? colors.foreground : colors.muted }]}>
-                    {formatTimestamp(pickTimestamp)}
-                  </Text>
+              <View style={st.timestampRow}>
+                <View style={st.timestampDisplay}>
+                  <MaterialIcons name="schedule" size={18} color={pickTimestamp ? GREEN : GRAY} />
+                  <Text style={[st.timestampText, { color: pickTimestamp ? FG : GRAY }]}>{formatTimestamp(pickTimestamp)}</Text>
                 </View>
-                <TouchableOpacity
-                  style={[s.nowBtn, { backgroundColor: colors.primary }]}
-                  onPress={() => recordTimestamp("pick")}
-                  activeOpacity={0.8}
-                  disabled={isCapturing}
-                >
-                  {isCapturing ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <>
-                      <MaterialIcons name="access-time" size={18} color="#fff" />
-                      <Text style={s.nowBtnText}>Now</Text>
-                    </>
+                <TouchableOpacity style={[st.nowBtn, { backgroundColor: BLUE }]} onPress={() => recordTimestamp("pick")} activeOpacity={0.8} disabled={isCapturing}>
+                  {isCapturing ? <ActivityIndicator size="small" color="#fff" /> : (
+                    <><MaterialIcons name="access-time" size={18} color="#fff" /><Text style={st.nowBtnText}>Now</Text></>
                   )}
                 </TouchableOpacity>
               </View>
               {pickGps ? (
-                <View style={s.gpsRow}>
-                  <MaterialIcons name="gps-fixed" size={14} color={colors.success} />
-                  <Text style={[s.gpsText, { color: colors.success }]}>{formatGps(pickGps)}</Text>
-                  {pickGps.accuracy != null ? (
-                    <Text style={[s.gpsAccuracy, { color: colors.muted }]}>({Math.round(pickGps.accuracy)}m)</Text>
-                  ) : null}
+                <View style={st.gpsRow}>
+                  <MaterialIcons name="gps-fixed" size={14} color={GREEN} />
+                  <Text style={[st.gpsText, { color: GREEN }]}>{formatGps(pickGps)}</Text>
+                  {pickGps.accuracy != null ? <Text style={st.gpsAccuracy}>({Math.round(pickGps.accuracy)}m)</Text> : null}
                 </View>
               ) : pickTimestamp ? (
-                <View style={s.gpsRow}>
-                  <MaterialIcons name="gps-off" size={14} color={colors.muted} />
-                  <Text style={[s.gpsText, { color: colors.muted }]}>No GPS recorded</Text>
+                <View style={st.gpsRow}>
+                  <MaterialIcons name="gps-off" size={14} color={GRAY} />
+                  <Text style={[st.gpsText, { color: GRAY }]}>No GPS recorded</Text>
                 </View>
               ) : null}
 
-              <View style={s.fieldSpacer} />
+              <View style={st.fieldSpacer} />
 
-              {/* Signature */}
               <FieldLabel label="Signature" />
-              <TouchableOpacity
-                style={[s.signatureBtn, { backgroundColor: colors.background, borderColor: colors.border }]}
-                onPress={() => captureSignature("pick")}
-                activeOpacity={0.7}
-              >
+              <TouchableOpacity style={st.signatureBtn} onPress={() => captureSignature("pick")} activeOpacity={0.7}>
                 {pickSignature ? (
-                  <View style={s.signatureCaptured}>
-                    <MaterialIcons name="check-circle" size={24} color={colors.success} />
-                    <Text style={[s.signatureText, { color: colors.success }]}>Signature captured</Text>
-                    <Text style={[s.signatureTap, { color: colors.muted }]}>Tap to redo</Text>
+                  <View style={st.signatureCaptured}>
+                    <MaterialIcons name="check-circle" size={24} color={GREEN} />
+                    <Text style={[st.signatureText, { color: GREEN }]}>Signature captured</Text>
+                    <Text style={st.signatureTap}>Tap to redo</Text>
                   </View>
                 ) : (
-                  <View style={s.signatureEmpty}>
-                    <MaterialIcons name="draw" size={28} color={colors.muted} />
-                    <Text style={[s.signatureText, { color: colors.muted }]}>Tap to capture signature</Text>
+                  <View style={st.signatureEmpty}>
+                    <MaterialIcons name="draw" size={28} color={GRAY} />
+                    <Text style={[st.signatureText, { color: GRAY }]}>Tap to capture signature</Text>
                   </View>
                 )}
               </TouchableOpacity>
 
-              <View style={s.fieldSpacer} />
+              <View style={st.fieldSpacer} />
 
-              {/* Signed By */}
               <FieldLabel label="Signed By" />
-              <TextInput
-                style={[s.textInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
-                placeholder="Name of person signing"
-                placeholderTextColor={colors.muted}
-                value={pickSignedBy}
-                onChangeText={setPickSignedBy}
-                returnKeyType="done"
-              />
+              <TextInput style={st.textInput} placeholder="Name of person signing" placeholderTextColor="#C7C7CC" value={pickSignedBy} onChangeText={setPickSignedBy} returnKeyType="done" />
 
-              <View style={s.fieldSpacer} />
+              <View style={st.fieldSpacer} />
 
-              {/* Delivery Notes */}
               <FieldLabel label="Notes / Comments" />
-              <TextInput
-                style={[s.notesInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
-                placeholder="Add pick-up notes, instructions, or comments..."
-                placeholderTextColor={colors.muted}
-                value={pickNotes}
-                onChangeText={setPickNotes}
-                multiline
-                numberOfLines={3}
-                textAlignVertical="top"
-                returnKeyType="default"
-              />
+              <TextInput style={st.notesInput} placeholder="Add pick-up notes, instructions, or comments..." placeholderTextColor="#C7C7CC" value={pickNotes} onChangeText={setPickNotes} multiline numberOfLines={3} textAlignVertical="top" returnKeyType="default" />
 
-              <View style={s.fieldSpacer} />
+              <View style={st.fieldSpacer} />
 
-              {/* Photo */}
               <FieldLabel label="Photo" />
-              <TouchableOpacity
-                style={[s.photoBtn, { backgroundColor: colors.background, borderColor: colors.border }]}
-                onPress={() => capturePhoto("pick")}
-                activeOpacity={0.7}
-              >
+              <TouchableOpacity style={st.photoBtn} onPress={() => capturePhoto("pick")} activeOpacity={0.7}>
                 {pickPhotoUri ? (
-                  <Image source={{ uri: pickPhotoUri }} style={s.photoImage} contentFit="cover" />
+                  <Image source={{ uri: pickPhotoUri }} style={st.photoImage} contentFit="cover" />
                 ) : (
-                  <View style={s.photoEmpty}>
-                    <MaterialIcons name="camera-alt" size={32} color={colors.muted} />
-                    <Text style={[s.photoText, { color: colors.muted }]}>Tap to take photo</Text>
+                  <View style={st.photoEmpty}>
+                    <MaterialIcons name="camera-alt" size={32} color={GRAY} />
+                    <Text style={st.photoText}>Tap to take photo</Text>
                   </View>
                 )}
               </TouchableOpacity>
 
-              <View style={s.fieldSpacer} />
+              <View style={st.fieldSpacer} />
 
-              {/* Barcode */}
               <FieldLabel label="Barcode / QR" />
-              <TouchableOpacity
-                style={[s.barcodeBtn, { backgroundColor: colors.background, borderColor: colors.border }]}
-                onPress={() => openBarcodeScanner("pick")}
-                activeOpacity={0.7}
-              >
+              <TouchableOpacity style={st.barcodeBtn} onPress={() => openBarcodeScanner("pick")} activeOpacity={0.7}>
                 {pickBarcode ? (
-                  <View style={s.barcodeRow}>
-                    <MaterialIcons name="qr-code" size={20} color={colors.success} />
-                    <Text style={[s.barcodeText, { color: colors.success }]} numberOfLines={1}>{pickBarcode.data}</Text>
+                  <View style={st.barcodeRow}>
+                    <MaterialIcons name="qr-code" size={20} color={GREEN} />
+                    <Text style={[st.barcodeText, { color: GREEN }]} numberOfLines={1}>{pickBarcode.data}</Text>
                   </View>
                 ) : (
-                  <View style={s.barcodeRow}>
-                    <MaterialIcons name="qr-code-scanner" size={20} color={colors.muted} />
-                    <Text style={[s.barcodeText, { color: colors.muted }]}>Scan barcode</Text>
+                  <View style={st.barcodeRow}>
+                    <MaterialIcons name="qr-code-scanner" size={20} color={GRAY} />
+                    <Text style={[st.barcodeText, { color: GRAY }]}>Scan barcode</Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -427,138 +376,89 @@ export default function LegDetailScreen() {
           </View>
 
           {/* DROP-OFF SECTION */}
-          <SectionHeader title="Drop-off" icon="place" iconColor={colors.error} colors={colors} />
-          <View style={s.section}>
-            <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              {/* Timestamp */}
+          <SectionHeader title="Drop-off" icon="place" iconColor={RED} />
+          <View style={st.section}>
+            <View style={st.card}>
               <FieldLabel label="Timestamp" />
-              <View style={s.timestampRow}>
-                <View style={[s.timestampDisplay, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                  <MaterialIcons name="schedule" size={18} color={dropTimestamp ? colors.success : colors.muted} />
-                  <Text style={[s.timestampText, { color: dropTimestamp ? colors.foreground : colors.muted }]}>
-                    {formatTimestamp(dropTimestamp)}
-                  </Text>
+              <View style={st.timestampRow}>
+                <View style={st.timestampDisplay}>
+                  <MaterialIcons name="schedule" size={18} color={dropTimestamp ? GREEN : GRAY} />
+                  <Text style={[st.timestampText, { color: dropTimestamp ? FG : GRAY }]}>{formatTimestamp(dropTimestamp)}</Text>
                 </View>
-                <TouchableOpacity
-                  style={[s.nowBtn, { backgroundColor: colors.primary }]}
-                  onPress={() => recordTimestamp("drop")}
-                  activeOpacity={0.8}
-                  disabled={isCapturing}
-                >
-                  {isCapturing ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <>
-                      <MaterialIcons name="access-time" size={18} color="#fff" />
-                      <Text style={s.nowBtnText}>Now</Text>
-                    </>
+                <TouchableOpacity style={[st.nowBtn, { backgroundColor: BLUE }]} onPress={() => recordTimestamp("drop")} activeOpacity={0.8} disabled={isCapturing}>
+                  {isCapturing ? <ActivityIndicator size="small" color="#fff" /> : (
+                    <><MaterialIcons name="access-time" size={18} color="#fff" /><Text style={st.nowBtnText}>Now</Text></>
                   )}
                 </TouchableOpacity>
               </View>
               {dropGps ? (
-                <View style={s.gpsRow}>
-                  <MaterialIcons name="gps-fixed" size={14} color={colors.success} />
-                  <Text style={[s.gpsText, { color: colors.success }]}>{formatGps(dropGps)}</Text>
-                  {dropGps.accuracy != null ? (
-                    <Text style={[s.gpsAccuracy, { color: colors.muted }]}>({Math.round(dropGps.accuracy)}m)</Text>
-                  ) : null}
+                <View style={st.gpsRow}>
+                  <MaterialIcons name="gps-fixed" size={14} color={GREEN} />
+                  <Text style={[st.gpsText, { color: GREEN }]}>{formatGps(dropGps)}</Text>
+                  {dropGps.accuracy != null ? <Text style={st.gpsAccuracy}>({Math.round(dropGps.accuracy)}m)</Text> : null}
                 </View>
               ) : dropTimestamp ? (
-                <View style={s.gpsRow}>
-                  <MaterialIcons name="gps-off" size={14} color={colors.muted} />
-                  <Text style={[s.gpsText, { color: colors.muted }]}>No GPS recorded</Text>
+                <View style={st.gpsRow}>
+                  <MaterialIcons name="gps-off" size={14} color={GRAY} />
+                  <Text style={[st.gpsText, { color: GRAY }]}>No GPS recorded</Text>
                 </View>
               ) : null}
 
-              <View style={s.fieldSpacer} />
+              <View style={st.fieldSpacer} />
 
-              {/* Signature */}
               <FieldLabel label="Signature" />
-              <TouchableOpacity
-                style={[s.signatureBtn, { backgroundColor: colors.background, borderColor: colors.border }]}
-                onPress={() => captureSignature("drop")}
-                activeOpacity={0.7}
-              >
+              <TouchableOpacity style={st.signatureBtn} onPress={() => captureSignature("drop")} activeOpacity={0.7}>
                 {dropSignature ? (
-                  <View style={s.signatureCaptured}>
-                    <MaterialIcons name="check-circle" size={24} color={colors.success} />
-                    <Text style={[s.signatureText, { color: colors.success }]}>Signature captured</Text>
-                    <Text style={[s.signatureTap, { color: colors.muted }]}>Tap to redo</Text>
+                  <View style={st.signatureCaptured}>
+                    <MaterialIcons name="check-circle" size={24} color={GREEN} />
+                    <Text style={[st.signatureText, { color: GREEN }]}>Signature captured</Text>
+                    <Text style={st.signatureTap}>Tap to redo</Text>
                   </View>
                 ) : (
-                  <View style={s.signatureEmpty}>
-                    <MaterialIcons name="draw" size={28} color={colors.muted} />
-                    <Text style={[s.signatureText, { color: colors.muted }]}>Tap to capture signature</Text>
+                  <View style={st.signatureEmpty}>
+                    <MaterialIcons name="draw" size={28} color={GRAY} />
+                    <Text style={[st.signatureText, { color: GRAY }]}>Tap to capture signature</Text>
                   </View>
                 )}
               </TouchableOpacity>
 
-              <View style={s.fieldSpacer} />
+              <View style={st.fieldSpacer} />
 
-              {/* Signed By */}
               <FieldLabel label="Signed By" />
-              <TextInput
-                style={[s.textInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
-                placeholder="Name of person signing"
-                placeholderTextColor={colors.muted}
-                value={dropSignedBy}
-                onChangeText={setDropSignedBy}
-                returnKeyType="done"
-              />
+              <TextInput style={st.textInput} placeholder="Name of person signing" placeholderTextColor="#C7C7CC" value={dropSignedBy} onChangeText={setDropSignedBy} returnKeyType="done" />
 
-              <View style={s.fieldSpacer} />
+              <View style={st.fieldSpacer} />
 
-              {/* Delivery Notes */}
               <FieldLabel label="Notes / Comments" />
-              <TextInput
-                style={[s.notesInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground }]}
-                placeholder="Add drop-off notes, instructions, or comments..."
-                placeholderTextColor={colors.muted}
-                value={dropNotes}
-                onChangeText={setDropNotes}
-                multiline
-                numberOfLines={3}
-                textAlignVertical="top"
-                returnKeyType="default"
-              />
+              <TextInput style={st.notesInput} placeholder="Add drop-off notes, instructions, or comments..." placeholderTextColor="#C7C7CC" value={dropNotes} onChangeText={setDropNotes} multiline numberOfLines={3} textAlignVertical="top" returnKeyType="default" />
 
-              <View style={s.fieldSpacer} />
+              <View style={st.fieldSpacer} />
 
-              {/* Photo */}
               <FieldLabel label="Photo" />
-              <TouchableOpacity
-                style={[s.photoBtn, { backgroundColor: colors.background, borderColor: colors.border }]}
-                onPress={() => capturePhoto("drop")}
-                activeOpacity={0.7}
-              >
+              <TouchableOpacity style={st.photoBtn} onPress={() => capturePhoto("drop")} activeOpacity={0.7}>
                 {dropPhotoUri ? (
-                  <Image source={{ uri: dropPhotoUri }} style={s.photoImage} contentFit="cover" />
+                  <Image source={{ uri: dropPhotoUri }} style={st.photoImage} contentFit="cover" />
                 ) : (
-                  <View style={s.photoEmpty}>
-                    <MaterialIcons name="camera-alt" size={32} color={colors.muted} />
-                    <Text style={[s.photoText, { color: colors.muted }]}>Tap to take photo</Text>
+                  <View style={st.photoEmpty}>
+                    <MaterialIcons name="camera-alt" size={32} color={GRAY} />
+                    <Text style={st.photoText}>Tap to take photo</Text>
                   </View>
                 )}
               </TouchableOpacity>
 
-              <View style={s.fieldSpacer} />
+              <View style={st.fieldSpacer} />
 
-              {/* Barcode */}
               <FieldLabel label="Barcode / QR" />
-              <TouchableOpacity
-                style={[s.barcodeBtn, { backgroundColor: colors.background, borderColor: colors.border }]}
-                onPress={() => openBarcodeScanner("drop")}
-                activeOpacity={0.7}
-              >
+              <TouchableOpacity style={st.barcodeBtn} onPress={() => openBarcodeScanner("drop")} activeOpacity={0.7}>
                 {dropBarcode ? (
-                  <View style={s.barcodeRow}>
-                    <MaterialIcons name="qr-code" size={20} color={colors.success} />
-                    <Text style={[s.barcodeText, { color: colors.success }]} numberOfLines={1}>{dropBarcode.data}</Text>
+                  <View style={st.barcodeRow}>
+                    <MaterialIcons name="qr-code" size={20} color={GREEN} />
+                    <Text style={[st.barcodeText, { color: GREEN }]} numberOfLines={1}>{dropBarcode.data}</Text>
                   </View>
                 ) : (
-                  <View style={s.barcodeRow}>
-                    <MaterialIcons name="qr-code-scanner" size={20} color={colors.muted} />
-                    <Text style={[s.barcodeText, { color: colors.muted }]}>Scan barcode</Text>
+                  <View style={st.barcodeRow}>
+                    <MaterialIcons name="qr-code-scanner" size={20} color={GRAY} />
+                    <Text style={[st.barcodeText, { color: GRAY }]}>Scan barcode</Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -567,9 +467,9 @@ export default function LegDetailScreen() {
         </ScrollView>
 
         {/* Floating Save Button */}
-        <View style={[s.saveBar, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+        <View style={st.saveBar}>
           <TouchableOpacity
-            style={[s.saveBtn, { backgroundColor: colors.primary, opacity: isSaving ? 0.7 : 1 }]}
+            style={[st.saveBtn, { opacity: isSaving ? 0.7 : 1 }]}
             onPress={handleSave}
             disabled={isSaving}
             activeOpacity={0.8}
@@ -579,7 +479,7 @@ export default function LegDetailScreen() {
             ) : (
               <>
                 <MaterialIcons name="save" size={20} color="#fff" />
-                <Text style={s.saveBtnText}>Save Changes</Text>
+                <Text style={st.saveBtnText}>Save Changes</Text>
               </>
             )}
           </TouchableOpacity>
@@ -590,57 +490,64 @@ export default function LegDetailScreen() {
 }
 
 function FieldLabel({ label }: { label: string }) {
-  return <Text style={s.fieldLabel}>{label}</Text>;
+  return <Text style={st.fieldLabel}>{label}</Text>;
 }
 
-function SectionHeader({ title, icon, iconColor, colors }: { title: string; icon: string; iconColor: string; colors: any }) {
+function SectionHeader({ title, icon, iconColor }: { title: string; icon: string; iconColor: string }) {
   return (
-    <View style={s.sectionHeader}>
+    <View style={st.sectionHeader}>
       <MaterialIcons name={icon as any} size={20} color={iconColor} />
-      <Text style={[s.sectionHeaderText, { color: colors.foreground }]}>{title}</Text>
+      <Text style={st.sectionHeaderText}>{title}</Text>
     </View>
   );
 }
 
-const s = StyleSheet.create({
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+const st = StyleSheet.create({
+  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#FFFFFF" },
   section: { paddingHorizontal: 16, marginBottom: 16 },
-  card: { borderRadius: 20, padding: 20, borderWidth: 1 },
+  card: {
+    borderRadius: 12, padding: 20, backgroundColor: "#FFFFFF",
+    ...Platform.select({
+      ios: { shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 6 },
+      android: { elevation: 2 },
+      web: { shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 6 },
+    }),
+  },
   cardHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
-  cardTitle: { fontSize: 18, fontWeight: "800", flex: 1, marginRight: 12 },
+  cardTitle: { fontSize: 18, fontWeight: "800", flex: 1, marginRight: 12, color: FG },
   routeViz: { gap: 2 },
   routePoint: { flexDirection: "row", alignItems: "center", gap: 10 },
-  routeText: { fontSize: 15, fontWeight: "500", flex: 1 },
-  routeLine: { marginLeft: 9, height: 16, borderLeftWidth: 2 },
-  jobRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 14, paddingTop: 12, borderTopWidth: 0.5, borderTopColor: "rgba(0,0,0,0.08)" },
-  jobText: { fontSize: 13, fontWeight: "500" },
+  routeText: { fontSize: 15, fontWeight: "500", flex: 1, color: FG },
+  routeLine: { marginLeft: 9, height: 16, borderLeftWidth: 2, borderLeftColor: BORDER },
+  jobRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 14, paddingTop: 12, borderTopWidth: 0.5, borderTopColor: BORDER },
+  jobText: { fontSize: 13, fontWeight: "500", color: GRAY },
   sectionHeader: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 20, marginBottom: 10, marginTop: 4 },
-  sectionHeaderText: { fontSize: 17, fontWeight: "700" },
-  fieldLabel: { fontSize: 13, fontWeight: "600", color: "#687076", marginBottom: 8 },
+  sectionHeaderText: { fontSize: 17, fontWeight: "700", color: FG },
+  fieldLabel: { fontSize: 13, fontWeight: "600", color: GRAY, marginBottom: 8 },
   fieldSpacer: { height: 16 },
   timestampRow: { flexDirection: "row", gap: 10 },
-  timestampDisplay: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10, borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 14 },
+  timestampDisplay: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10, borderRadius: 12, borderWidth: 1, borderColor: BORDER, paddingHorizontal: 14, paddingVertical: 14, backgroundColor: SURFACE },
   timestampText: { fontSize: 14, fontWeight: "500", flex: 1 },
-  nowBtn: { flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 14, paddingHorizontal: 20, paddingVertical: 14 },
+  nowBtn: { flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 14 },
   nowBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
   gpsRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8 },
   gpsText: { fontSize: 12, fontWeight: "500" },
-  gpsAccuracy: { fontSize: 12, marginLeft: 2 },
-  signatureBtn: { borderRadius: 14, borderWidth: 1, height: 100, alignItems: "center", justifyContent: "center" },
+  gpsAccuracy: { fontSize: 12, marginLeft: 2, color: GRAY },
+  signatureBtn: { borderRadius: 12, borderWidth: 1, borderColor: BORDER, height: 100, alignItems: "center", justifyContent: "center", backgroundColor: SURFACE },
   signatureCaptured: { alignItems: "center", gap: 4 },
   signatureEmpty: { alignItems: "center", gap: 6 },
   signatureText: { fontSize: 14, fontWeight: "600" },
-  signatureTap: { fontSize: 12 },
-  textInput: { borderRadius: 14, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 14, fontSize: 15 },
-  notesInput: { borderRadius: 14, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 14, fontSize: 15, minHeight: 80 },
-  photoBtn: { borderRadius: 14, borderWidth: 1, overflow: "hidden" },
+  signatureTap: { fontSize: 12, color: GRAY },
+  textInput: { borderRadius: 12, borderWidth: 1, borderColor: BORDER, paddingHorizontal: 16, paddingVertical: 14, fontSize: 15, backgroundColor: SURFACE, color: FG },
+  notesInput: { borderRadius: 12, borderWidth: 1, borderColor: BORDER, paddingHorizontal: 16, paddingVertical: 14, fontSize: 15, minHeight: 80, backgroundColor: SURFACE, color: FG },
+  photoBtn: { borderRadius: 12, borderWidth: 1, borderColor: BORDER, overflow: "hidden", backgroundColor: SURFACE },
   photoImage: { width: "100%", height: 180 },
   photoEmpty: { height: 100, alignItems: "center", justifyContent: "center", gap: 6 },
-  photoText: { fontSize: 14, fontWeight: "500" },
-  barcodeBtn: { borderRadius: 14, borderWidth: 1, paddingVertical: 16, paddingHorizontal: 16 },
+  photoText: { fontSize: 14, fontWeight: "500", color: GRAY },
+  barcodeBtn: { borderRadius: 12, borderWidth: 1, borderColor: BORDER, paddingVertical: 16, paddingHorizontal: 16, backgroundColor: SURFACE },
   barcodeRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
   barcodeText: { fontSize: 14, fontWeight: "600" },
-  saveBar: { position: "absolute", bottom: 0, left: 0, right: 0, padding: 16, borderTopWidth: 0.5 },
-  saveBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 16, paddingVertical: 16 },
+  saveBar: { position: "absolute", bottom: 0, left: 0, right: 0, padding: 16, backgroundColor: "#FFFFFF", borderTopWidth: 0.5, borderTopColor: BORDER },
+  saveBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 12, paddingVertical: 16, backgroundColor: BLUE },
   saveBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
 });

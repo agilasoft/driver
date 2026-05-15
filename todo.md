@@ -51,3 +51,11 @@
 - [x] Leg completion progress bar on run sheet cards
 - [x] Redesign login screen to match CargoNext app style (clean, professional, step-based)
 - [x] Redesign profile picker to match CargoNext visual style
+- [x] Update theme colors to match CargoNext palette (blue header, orange accent, white body)
+- [x] Redesign profile picker to exactly match CargoNext screenshot (blue gradient header, white body, orange FAB, Agilasoft branding)
+- [x] Redesign login screen with CargoNext design language
+- [x] Update tab bar styling to match CargoNext design
+- [x] Update run sheets list screen with CargoNext design
+- [x] Update settings screen with CargoNext design
+- [x] Update run sheet detail screen with CargoNext design
+- [x] Update leg detail screen with CargoNext design

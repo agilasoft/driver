@@ -15,7 +15,6 @@ import * as Notifications from "expo-notifications";
 import { ScreenContainer } from "@/components/screen-container";
 import { useAuth } from "@/lib/auth-context";
 import { useSync } from "@/lib/sync-context";
-import { useColors } from "@/hooks/use-colors";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import {
   requestNotificationPermissions,
@@ -24,6 +23,18 @@ import {
 } from "@/lib/notifications";
 import { checkBiometricAvailability } from "@/lib/profile-manager";
 import { useThemeContext, type ThemePreference } from "@/lib/theme-provider";
+import { LinearGradient } from "expo-linear-gradient";
+
+const BLUE = "#3478C6";
+const BLUE_LIGHT = "#5B9BD5";
+const ORANGE = "#F27A2E";
+const GREEN = "#34C759";
+const RED = "#FF3B30";
+const WARN = "#FF9500";
+const GRAY = "#8E8E93";
+const BORDER = "#E5E5EA";
+const SURFACE = "#F5F5F7";
+const FG = "#1A1A1A";
 
 export default function SettingsScreen() {
   const {
@@ -32,7 +43,6 @@ export default function SettingsScreen() {
     updateProfilePin, updateProfileBiometric, removeProfile,
   } = useAuth();
   const { isOnline, pendingCount, isSyncing, lastSync, syncNow } = useSync();
-  const colors = useColors();
   const router = useRouter();
   const { themePreference, setThemePreference, colorScheme } = useThemeContext();
   const params = useLocalSearchParams<{
@@ -42,7 +52,6 @@ export default function SettingsScreen() {
   }>();
   const [notifEnabled, setNotifEnabled] = useState(false);
 
-  // Configuration editing state
   const [configExpanded, setConfigExpanded] = useState(false);
   const [editSiteUrl, setEditSiteUrl] = useState(auth?.siteUrl || "");
   const [editApiKey, setEditApiKey] = useState(auth?.apiKey || "");
@@ -52,7 +61,6 @@ export default function SettingsScreen() {
   const [isTesting, setIsTesting] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // Security state
   const [securityExpanded, setSecurityExpanded] = useState(false);
   const [pinSetup, setPinSetup] = useState(false);
   const [newPin, setNewPin] = useState("");
@@ -79,7 +87,6 @@ export default function SettingsScreen() {
     }
   }, [params.scannedSiteUrl, params.scannedApiKey, params.scannedApiSecret]);
 
-  // Check biometric availability
   useEffect(() => {
     (async () => {
       const bio = await checkBiometricAvailability();
@@ -182,13 +189,7 @@ export default function SettingsScreen() {
       "This will permanently remove this profile and all its saved data from this device. This cannot be undone.",
       [
         { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            await removeProfile(activeProfile.id);
-          },
-        },
+        { text: "Delete", style: "destructive", onPress: async () => { await removeProfile(activeProfile.id); } },
       ]
     );
   };
@@ -249,61 +250,78 @@ export default function SettingsScreen() {
   const hasBio = !!activeProfile?.useBiometric;
 
   return (
-    <ScreenContainer>
-      <ScrollView contentContainerStyle={{ paddingBottom: 50, paddingHorizontal: 16, paddingTop: 8 }} keyboardShouldPersistTaps="handled">
-        <Text style={[s.pageTitle, { color: colors.foreground }]}>Settings</Text>
+    <ScreenContainer containerClassName="bg-white">
+      {/* Blue gradient header */}
+      <LinearGradient
+        colors={[BLUE, BLUE_LIGHT]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={st.gradientHeader}
+      >
+        <Text style={st.headerTitle}>Settings</Text>
+        {auth?.driverName ? (
+          <Text style={st.headerSubtitle}>{auth.driverName}</Text>
+        ) : auth?.fullName ? (
+          <Text style={st.headerSubtitle}>{auth.fullName}</Text>
+        ) : null}
+      </LinearGradient>
 
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: 50, paddingHorizontal: 16, paddingTop: 16 }}
+        keyboardShouldPersistTaps="handled"
+        style={{ backgroundColor: "#FFFFFF" }}
+      >
         {/* Profile Card */}
-        <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={s.userRow}>
-            <View style={[s.avatar, { backgroundColor: activeProfile?.avatarColor || colors.primary }]}>
-              <Text style={s.avatarText}>
+        <View style={st.card}>
+          <View style={st.userRow}>
+            <View style={[st.avatar, { backgroundColor: activeProfile?.avatarColor || BLUE }]}>
+              <Text style={st.avatarText}>
                 {(auth?.fullName || auth?.userName || "?").split(" ").map(w => w[0]).join("").toUpperCase().substring(0, 2)}
               </Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[s.userName, { color: colors.foreground }]}>{auth?.fullName || "Unknown User"}</Text>
-              <Text style={[s.userEmail, { color: colors.muted }]}>{auth?.userName}</Text>
+              <Text style={st.userName}>{auth?.fullName || "Unknown User"}</Text>
+              <Text style={st.userEmail}>{auth?.userName}</Text>
               {profiles.length > 1 ? (
-                <Text style={[s.profileCount, { color: colors.primary }]}>
+                <Text style={[st.profileCount, { color: BLUE }]}>
                   {profiles.length} profiles on this device
                 </Text>
               ) : null}
             </View>
           </View>
 
-          <View style={[s.divider, { backgroundColor: colors.border }]} />
+          <View style={st.divider} />
 
-          <View style={s.infoRow}>
-            <MaterialIcons name="language" size={18} color={colors.muted} />
-            <Text style={[s.infoText, { color: colors.muted }]} numberOfLines={1}>{auth?.siteUrl || "Not connected"}</Text>
+          <View style={st.infoRow}>
+            <MaterialIcons name="language" size={18} color={GRAY} />
+            <Text style={st.infoText} numberOfLines={1}>{auth?.siteUrl || "Not connected"}</Text>
           </View>
 
           {auth?.driverId ? (
-            <View style={s.infoRow}>
-              <MaterialIcons name="badge" size={18} color={colors.primary} />
-              <Text style={[s.infoText, { color: colors.primary }]} numberOfLines={1}>Driver: {auth.driverName || auth.driverId}</Text>
+            <View style={st.infoRow}>
+              <MaterialIcons name="badge" size={18} color={BLUE} />
+              <Text style={[st.infoText, { color: BLUE }]} numberOfLines={1}>Driver: {auth.driverName || auth.driverId}</Text>
             </View>
           ) : (
             <View style={{ gap: 8 }}>
-              <View style={s.infoRow}>
-                <MaterialIcons name="warning" size={18} color={colors.warning} />
-                <Text style={[s.infoTextWarn, { color: colors.warning }]} numberOfLines={3}>
+              <View style={st.infoRow}>
+                <MaterialIcons name="warning" size={18} color={WARN} />
+                <Text style={[st.infoText, { color: WARN }]} numberOfLines={3}>
                   No Driver record linked. Set the "User" field on your Driver record to: {auth?.userName}
                 </Text>
               </View>
               {auth?.driverLinkError ? (
                 <TouchableOpacity
                   onPress={() => Alert.alert("Driver Lookup Details", auth.driverLinkError || "No details", [{ text: "OK" }])}
-                  style={s.diagLink}
+                  style={st.diagLink}
                   activeOpacity={0.7}
                 >
-                  <MaterialIcons name="info-outline" size={14} color={colors.muted} />
-                  <Text style={[s.diagText, { color: colors.muted }]}>View diagnostic details</Text>
+                  <MaterialIcons name="info-outline" size={14} color={GRAY} />
+                  <Text style={st.diagText}>View diagnostic details</Text>
                 </TouchableOpacity>
               ) : null}
               <TouchableOpacity
-                style={s.retryBtn}
+                style={st.retryBtn}
                 onPress={async () => {
                   if (!auth) return;
                   try {
@@ -315,19 +333,18 @@ export default function SettingsScreen() {
                 }}
                 activeOpacity={0.7}
               >
-                <MaterialIcons name="refresh" size={16} color={colors.primary} />
-                <Text style={[s.retryText, { color: colors.primary }]}>Retry Driver Lookup</Text>
+                <MaterialIcons name="refresh" size={16} color={BLUE} />
+                <Text style={[st.retryText, { color: BLUE }]}>Retry Driver Lookup</Text>
               </TouchableOpacity>
             </View>
           )}
         </View>
 
         {/* Profile Security */}
-        <Text style={[s.sectionLabel, { color: colors.muted }]}>PROFILE SECURITY</Text>
-        <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border, padding: 0, overflow: "hidden" }]}>
-          {/* PIN */}
+        <Text style={st.sectionLabel}>PROFILE SECURITY</Text>
+        <View style={[st.card, { padding: 0, overflow: "hidden" }]}>
           <TouchableOpacity
-            style={s.securityRow}
+            style={st.securityRow}
             onPress={() => {
               if (hasPin) {
                 Alert.alert("PIN Protection", "Your profile is protected with a PIN.", [
@@ -342,69 +359,66 @@ export default function SettingsScreen() {
             }}
             activeOpacity={0.7}
           >
-            <MaterialIcons name="pin" size={22} color={hasPin ? colors.success : colors.muted} />
+            <MaterialIcons name="pin" size={22} color={hasPin ? GREEN : GRAY} />
             <View style={{ flex: 1 }}>
-              <Text style={[s.securityLabel, { color: colors.foreground }]}>PIN Lock</Text>
-              <Text style={[s.securityDesc, { color: colors.muted }]}>
+              <Text style={st.securityLabel}>PIN Lock</Text>
+              <Text style={st.securityDesc}>
                 {hasPin ? "Enabled — tap to change or remove" : "Tap to set a PIN"}
               </Text>
             </View>
-            <View style={[s.statusDot, { backgroundColor: hasPin ? colors.success : colors.border }]} />
+            <View style={[st.statusDot, { backgroundColor: hasPin ? GREEN : BORDER }]} />
           </TouchableOpacity>
 
           {pinSetup && securityExpanded && (
-            <View style={[s.pinSetupArea, { borderTopColor: colors.border }]}>
-              <Text style={[s.pinSetupTitle, { color: colors.foreground }]}>
-                {hasPin ? "Change PIN" : "Set PIN"}
-              </Text>
+            <View style={st.pinSetupArea}>
+              <Text style={st.pinSetupTitle}>{hasPin ? "Change PIN" : "Set PIN"}</Text>
               <TextInput
-                style={[s.pinInput, { backgroundColor: colors.background, borderColor: pinError ? colors.error : colors.border, color: colors.foreground }]}
+                style={[st.pinInput, { borderColor: pinError ? RED : BORDER }]}
                 value={newPin}
                 onChangeText={(t) => { setNewPin(t.replace(/[^0-9]/g, "")); setPinError(""); }}
                 placeholder="Enter new PIN (4-6 digits)"
-                placeholderTextColor={colors.muted}
+                placeholderTextColor="#C7C7CC"
                 keyboardType="number-pad"
                 secureTextEntry
                 maxLength={6}
                 returnKeyType="next"
               />
               <TextInput
-                style={[s.pinInput, { backgroundColor: colors.background, borderColor: pinError ? colors.error : colors.border, color: colors.foreground }]}
+                style={[st.pinInput, { borderColor: pinError ? RED : BORDER }]}
                 value={confirmPin}
                 onChangeText={(t) => { setConfirmPin(t.replace(/[^0-9]/g, "")); setPinError(""); }}
                 placeholder="Confirm PIN"
-                placeholderTextColor={colors.muted}
+                placeholderTextColor="#C7C7CC"
                 keyboardType="number-pad"
                 secureTextEntry
                 maxLength={6}
                 returnKeyType="done"
                 onSubmitEditing={handleSetPin}
               />
-              {pinError ? <Text style={[s.pinErrorText, { color: colors.error }]}>{pinError}</Text> : null}
-              <View style={s.pinActions}>
+              {pinError ? <Text style={st.pinErrorText}>{pinError}</Text> : null}
+              <View style={st.pinActions}>
                 <TouchableOpacity
-                  style={[s.pinCancelBtn, { borderColor: colors.border }]}
+                  style={st.pinCancelBtn}
                   onPress={() => { setPinSetup(false); setNewPin(""); setConfirmPin(""); setPinError(""); setSecurityExpanded(false); }}
                   activeOpacity={0.7}
                 >
-                  <Text style={[s.pinCancelText, { color: colors.muted }]}>Cancel</Text>
+                  <Text style={st.pinCancelText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[s.pinSaveBtn, { backgroundColor: colors.primary }]}
+                  style={[st.pinSaveBtn, { backgroundColor: BLUE }]}
                   onPress={handleSetPin}
                   activeOpacity={0.7}
                 >
-                  <Text style={s.pinSaveText}>Save PIN</Text>
+                  <Text style={st.pinSaveText}>Save PIN</Text>
                 </TouchableOpacity>
               </View>
             </View>
           )}
 
-          <View style={[s.rowDivider, { backgroundColor: colors.border }]} />
+          <View style={st.rowDivider} />
 
-          {/* Biometric */}
           <TouchableOpacity
-            style={s.securityRow}
+            style={st.securityRow}
             onPress={() => {
               if (!bioAvailable) {
                 Alert.alert("Not Available", "Biometric authentication is not available on this device.");
@@ -417,63 +431,63 @@ export default function SettingsScreen() {
             <MaterialIcons
               name="fingerprint"
               size={22}
-              color={hasBio ? colors.success : (bioAvailable ? colors.muted : colors.border)}
+              color={hasBio ? GREEN : (bioAvailable ? GRAY : BORDER)}
             />
             <View style={{ flex: 1 }}>
-              <Text style={[s.securityLabel, { color: bioAvailable ? colors.foreground : colors.muted }]}>
+              <Text style={[st.securityLabel, { color: bioAvailable ? FG : GRAY }]}>
                 {bioType || "Biometric"} Lock
               </Text>
-              <Text style={[s.securityDesc, { color: colors.muted }]}>
+              <Text style={st.securityDesc}>
                 {!bioAvailable ? "Not available on this device" : hasBio ? "Enabled — tap to disable" : "Tap to enable"}
               </Text>
             </View>
-            <View style={[s.statusDot, { backgroundColor: hasBio ? colors.success : colors.border }]} />
+            <View style={[st.statusDot, { backgroundColor: hasBio ? GREEN : BORDER }]} />
           </TouchableOpacity>
         </View>
 
         {/* Configuration */}
-        <Text style={[s.sectionLabel, { color: colors.muted }]}>CONFIGURATION</Text>
-        <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border, padding: 0, overflow: "hidden" }]}>
+        <Text style={st.sectionLabel}>CONFIGURATION</Text>
+        <View style={[st.card, { padding: 0, overflow: "hidden" }]}>
           <TouchableOpacity
-            style={s.configHeader}
+            style={st.configHeader}
             onPress={() => { setConfigExpanded(!configExpanded); setSaveMessage(null); }}
             activeOpacity={0.7}
           >
-            <MaterialIcons name="settings-ethernet" size={22} color={colors.primary} />
+            <MaterialIcons name="settings-ethernet" size={22} color={BLUE} />
             <View style={{ flex: 1 }}>
-              <Text style={[s.configTitle, { color: colors.foreground }]}>Server Connection</Text>
-              <Text style={[s.configSubtitle, { color: colors.muted }]} numberOfLines={1}>{auth?.siteUrl || "Not configured"}</Text>
+              <Text style={st.configTitle}>Server Connection</Text>
+              <Text style={st.configSubtitle} numberOfLines={1}>{auth?.siteUrl || "Not configured"}</Text>
             </View>
-            <MaterialIcons name={configExpanded ? "expand-less" : "expand-more"} size={26} color={colors.muted} />
+            <MaterialIcons name={configExpanded ? "expand-less" : "expand-more"} size={26} color={GRAY} />
           </TouchableOpacity>
 
           {configExpanded && (
-            <View style={[s.configBody, { borderTopColor: colors.border }]}>
+            <View style={st.configBody}>
               <TouchableOpacity
-                style={[s.scanQrBtn, { borderColor: colors.primary, backgroundColor: colors.background }]}
+                style={st.scanQrBtn}
                 onPress={handleScanQR}
                 activeOpacity={0.7}
               >
-                <MaterialIcons name="qr-code-scanner" size={22} color={colors.primary} />
-                <Text style={[s.scanQrText, { color: colors.primary }]}>Scan QR Code to Configure</Text>
+                <MaterialIcons name="qr-code-scanner" size={22} color={BLUE} />
+                <Text style={[st.scanQrText, { color: BLUE }]}>Scan QR Code to Configure</Text>
               </TouchableOpacity>
 
-              <View style={s.orDivider}>
-                <View style={[s.orLine, { backgroundColor: colors.border }]} />
-                <Text style={[s.orText, { color: colors.muted }]}>or enter manually</Text>
-                <View style={[s.orLine, { backgroundColor: colors.border }]} />
+              <View style={st.orDivider}>
+                <View style={st.orLine} />
+                <Text style={st.orText}>or enter manually</Text>
+                <View style={st.orLine} />
               </View>
 
-              <View style={s.fieldGroup}>
-                <Text style={[s.fieldLabel, { color: colors.muted }]}>Server URL</Text>
-                <View style={[s.inputRow, { borderColor: colors.border, backgroundColor: colors.background }]}>
-                  <MaterialIcons name="language" size={20} color={colors.muted} />
+              <View style={st.fieldGroup}>
+                <Text style={st.fieldLabel}>Server URL</Text>
+                <View style={st.inputRow}>
+                  <MaterialIcons name="language" size={20} color={GRAY} />
                   <TextInput
-                    style={[s.input, { color: colors.foreground }]}
+                    style={st.input}
                     value={editSiteUrl}
                     onChangeText={(t) => { setEditSiteUrl(t); setSaveMessage(null); }}
                     placeholder="https://your-site.frappe.cloud"
-                    placeholderTextColor={colors.muted}
+                    placeholderTextColor="#C7C7CC"
                     autoCapitalize="none"
                     autoCorrect={false}
                     keyboardType="url"
@@ -482,16 +496,16 @@ export default function SettingsScreen() {
                 </View>
               </View>
 
-              <View style={s.fieldGroup}>
-                <Text style={[s.fieldLabel, { color: colors.muted }]}>API Key</Text>
-                <View style={[s.inputRow, { borderColor: colors.border, backgroundColor: colors.background }]}>
-                  <MaterialIcons name="vpn-key" size={20} color={colors.muted} />
+              <View style={st.fieldGroup}>
+                <Text style={st.fieldLabel}>API Key</Text>
+                <View style={st.inputRow}>
+                  <MaterialIcons name="vpn-key" size={20} color={GRAY} />
                   <TextInput
-                    style={[s.input, { color: colors.foreground }]}
+                    style={st.input}
                     value={editApiKey}
                     onChangeText={(t) => { setEditApiKey(t); setSaveMessage(null); }}
                     placeholder="Your API Key"
-                    placeholderTextColor={colors.muted}
+                    placeholderTextColor="#C7C7CC"
                     autoCapitalize="none"
                     autoCorrect={false}
                     returnKeyType="next"
@@ -499,77 +513,77 @@ export default function SettingsScreen() {
                 </View>
               </View>
 
-              <View style={s.fieldGroup}>
-                <Text style={[s.fieldLabel, { color: colors.muted }]}>API Secret</Text>
-                <View style={[s.inputRow, { borderColor: colors.border, backgroundColor: colors.background }]}>
-                  <MaterialIcons name="lock" size={20} color={colors.muted} />
+              <View style={st.fieldGroup}>
+                <Text style={st.fieldLabel}>API Secret</Text>
+                <View style={st.inputRow}>
+                  <MaterialIcons name="lock" size={20} color={GRAY} />
                   <TextInput
-                    style={[s.input, { color: colors.foreground }]}
+                    style={st.input}
                     value={editApiSecret}
                     onChangeText={(t) => { setEditApiSecret(t); setSaveMessage(null); }}
                     placeholder="Your API Secret"
-                    placeholderTextColor={colors.muted}
+                    placeholderTextColor="#C7C7CC"
                     autoCapitalize="none"
                     autoCorrect={false}
                     secureTextEntry={!showApiSecret}
                     returnKeyType="done"
                   />
-                  <TouchableOpacity onPress={() => setShowApiSecret(!showApiSecret)} style={s.eyeBtn} activeOpacity={0.6}>
-                    <MaterialIcons name={showApiSecret ? "visibility-off" : "visibility"} size={20} color={colors.muted} />
+                  <TouchableOpacity onPress={() => setShowApiSecret(!showApiSecret)} style={st.eyeBtn} activeOpacity={0.6}>
+                    <MaterialIcons name={showApiSecret ? "visibility-off" : "visibility"} size={20} color={GRAY} />
                   </TouchableOpacity>
                 </View>
               </View>
 
               {saveMessage && (
-                <View style={[s.messageBox, {
-                  backgroundColor: saveMessage.type === "success" ? colors.success + "15" : colors.error + "15",
-                  borderColor: saveMessage.type === "success" ? colors.success : colors.error,
+                <View style={[st.messageBox, {
+                  backgroundColor: saveMessage.type === "success" ? GREEN + "15" : RED + "15",
+                  borderColor: saveMessage.type === "success" ? GREEN : RED,
                 }]}>
                   <MaterialIcons
                     name={saveMessage.type === "success" ? "check-circle" : "error-outline"}
                     size={18}
-                    color={saveMessage.type === "success" ? colors.success : colors.error}
+                    color={saveMessage.type === "success" ? GREEN : RED}
                   />
-                  <Text style={[s.messageText, { color: saveMessage.type === "success" ? colors.success : colors.error }]}>
+                  <Text style={[st.messageText, { color: saveMessage.type === "success" ? GREEN : RED }]}>
                     {saveMessage.text}
                   </Text>
                 </View>
               )}
 
-              <View style={s.configActions}>
+              <View style={st.configActions}>
                 <TouchableOpacity
-                  style={[s.configBtn, { borderColor: colors.border }]}
+                  style={st.configBtn}
                   onPress={handleTestConnection}
                   disabled={isTesting}
                   activeOpacity={0.7}
                 >
-                  {isTesting ? <ActivityIndicator size="small" color={colors.primary} /> : <MaterialIcons name="wifi-tethering" size={18} color={colors.primary} />}
-                  <Text style={[s.configBtnText, { color: colors.primary }]}>Test</Text>
+                  {isTesting ? <ActivityIndicator size="small" color={BLUE} /> : <MaterialIcons name="wifi-tethering" size={18} color={BLUE} />}
+                  <Text style={[st.configBtnText, { color: BLUE }]}>Test</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[s.configBtn, { borderColor: colors.border }]}
+                  style={st.configBtn}
                   onPress={handleResetConfig}
                   activeOpacity={0.7}
                 >
-                  <MaterialIcons name="undo" size={18} color={colors.muted} />
-                  <Text style={[s.configBtnText, { color: colors.muted }]}>Reset</Text>
+                  <MaterialIcons name="undo" size={18} color={GRAY} />
+                  <Text style={[st.configBtnText, { color: GRAY }]}>Reset</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[s.configBtn, s.configBtnPrimary, { backgroundColor: colors.primary, opacity: isSaving ? 0.6 : 1 }]}
+                  style={[st.configBtn, st.configBtnPrimary, { backgroundColor: BLUE, opacity: isSaving ? 0.6 : 1 }]}
                   onPress={handleSaveConfig}
                   disabled={isSaving}
                   activeOpacity={0.7}
                 >
                   {isSaving ? <ActivityIndicator size="small" color="#fff" /> : <MaterialIcons name="save" size={18} color="#fff" />}
-                  <Text style={[s.configBtnText, { color: "#fff" }]}>Save</Text>
+                  <Text style={[st.configBtnText, { color: "#fff" }]}>Save</Text>
                 </TouchableOpacity>
               </View>
 
-              <View style={[s.hintBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                <MaterialIcons name="info-outline" size={16} color={colors.muted} />
-                <Text style={[s.hintText, { color: colors.muted }]}>
+              <View style={st.hintBox}>
+                <MaterialIcons name="info-outline" size={16} color={GRAY} />
+                <Text style={st.hintText}>
                   Generate API keys in your Frappe site under Settings {">"} API Access. Or scan a QR code from your administrator.
                 </Text>
               </View>
@@ -578,66 +592,47 @@ export default function SettingsScreen() {
         </View>
 
         {/* Sync Status */}
-        <Text style={[s.sectionLabel, { color: colors.muted }]}>SYNC</Text>
-        <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border, padding: 0, overflow: "hidden" }]}>
-          <SettingRow icon="cloud" iconColor={isOnline ? colors.success : colors.error} label="Status" value={isOnline ? "Online" : "Offline"} valueColor={isOnline ? colors.success : colors.error} colors={colors} />
-          <View style={[s.rowDivider, { backgroundColor: colors.border }]} />
-          <SettingRow icon="cloud-upload" iconColor={colors.warning} label="Pending Changes" value={String(pendingCount)} valueColor={pendingCount > 0 ? colors.warning : colors.muted} colors={colors} />
-          <View style={[s.rowDivider, { backgroundColor: colors.border }]} />
-          <SettingRow icon="schedule" iconColor={colors.muted} label="Last Sync" value={formatLastSync()} colors={colors} />
-          <View style={[s.rowDivider, { backgroundColor: colors.border }]} />
-          <TouchableOpacity style={s.actionRow} onPress={handleSyncNow} disabled={isSyncing} activeOpacity={0.7}>
-            {isSyncing ? <ActivityIndicator size="small" color={colors.primary} /> : <MaterialIcons name="sync" size={22} color={colors.primary} />}
-            <Text style={[s.actionText, { color: colors.primary }]}>{isSyncing ? "Syncing..." : "Sync Now"}</Text>
+        <Text style={st.sectionLabel}>SYNC</Text>
+        <View style={[st.card, { padding: 0, overflow: "hidden" }]}>
+          <SettingRow icon="cloud" iconColor={isOnline ? GREEN : RED} label="Status" value={isOnline ? "Online" : "Offline"} valueColor={isOnline ? GREEN : RED} />
+          <View style={st.rowDivider} />
+          <SettingRow icon="cloud-upload" iconColor={WARN} label="Pending Changes" value={String(pendingCount)} valueColor={pendingCount > 0 ? WARN : GRAY} />
+          <View style={st.rowDivider} />
+          <SettingRow icon="schedule" iconColor={GRAY} label="Last Sync" value={formatLastSync()} />
+          <View style={st.rowDivider} />
+          <TouchableOpacity style={st.actionRow} onPress={handleSyncNow} disabled={isSyncing} activeOpacity={0.7}>
+            {isSyncing ? <ActivityIndicator size="small" color={BLUE} /> : <MaterialIcons name="sync" size={22} color={BLUE} />}
+            <Text style={[st.actionText, { color: BLUE }]}>{isSyncing ? "Syncing..." : "Sync Now"}</Text>
           </TouchableOpacity>
         </View>
 
         {/* Appearance */}
-        <Text style={[s.sectionLabel, { color: colors.muted }]}>APPEARANCE</Text>
-        <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border, padding: 0, overflow: "hidden" }]}>
-          <ThemeOption
-            label="System Default"
-            icon="settings-brightness"
-            selected={themePreference === "system"}
-            onPress={() => setThemePreference("system")}
-            colors={colors}
-          />
-          <View style={[s.rowDivider, { backgroundColor: colors.border }]} />
-          <ThemeOption
-            label="Light Mode"
-            icon="light-mode"
-            selected={themePreference === "light"}
-            onPress={() => setThemePreference("light")}
-            colors={colors}
-          />
-          <View style={[s.rowDivider, { backgroundColor: colors.border }]} />
-          <ThemeOption
-            label="Dark Mode"
-            icon="dark-mode"
-            selected={themePreference === "dark"}
-            onPress={() => setThemePreference("dark")}
-            colors={colors}
-          />
+        <Text style={st.sectionLabel}>APPEARANCE</Text>
+        <View style={[st.card, { padding: 0, overflow: "hidden" }]}>
+          <ThemeOption label="System Default" icon="settings-brightness" selected={themePreference === "system"} onPress={() => setThemePreference("system")} />
+          <View style={st.rowDivider} />
+          <ThemeOption label="Light Mode" icon="light-mode" selected={themePreference === "light"} onPress={() => setThemePreference("light")} />
+          <View style={st.rowDivider} />
+          <ThemeOption label="Dark Mode" icon="dark-mode" selected={themePreference === "dark"} onPress={() => setThemePreference("dark")} />
         </View>
 
         {/* Notifications */}
-        <Text style={[s.sectionLabel, { color: colors.muted }]}>NOTIFICATIONS</Text>
-        <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border, padding: 0, overflow: "hidden" }]}>
-          <SettingRow icon="notifications" iconColor={notifEnabled ? colors.success : colors.muted} label="Assignment Alerts" value={notifEnabled ? "Enabled" : "Disabled"} valueColor={notifEnabled ? colors.success : colors.muted} colors={colors} />
-          <View style={[s.rowDivider, { backgroundColor: colors.border }]} />
-          <TouchableOpacity style={s.actionRow} onPress={handleToggleNotifications} activeOpacity={0.7}>
-            <MaterialIcons name={notifEnabled ? "notifications-off" : "notifications-active"} size={22} color={colors.primary} />
-            <Text style={[s.actionText, { color: colors.primary }]}>{notifEnabled ? "Pause Notifications" : "Enable Notifications"}</Text>
+        <Text style={st.sectionLabel}>NOTIFICATIONS</Text>
+        <View style={[st.card, { padding: 0, overflow: "hidden" }]}>
+          <SettingRow icon="notifications" iconColor={notifEnabled ? GREEN : GRAY} label="Assignment Alerts" value={notifEnabled ? "Enabled" : "Disabled"} valueColor={notifEnabled ? GREEN : GRAY} />
+          <View style={st.rowDivider} />
+          <TouchableOpacity style={st.actionRow} onPress={handleToggleNotifications} activeOpacity={0.7}>
+            <MaterialIcons name={notifEnabled ? "notifications-off" : "notifications-active"} size={22} color={BLUE} />
+            <Text style={[st.actionText, { color: BLUE }]}>{notifEnabled ? "Pause Notifications" : "Enable Notifications"}</Text>
           </TouchableOpacity>
         </View>
 
         {/* Profile Actions */}
-        <Text style={[s.sectionLabel, { color: colors.muted }]}>PROFILE</Text>
+        <Text style={st.sectionLabel}>PROFILE</Text>
 
-        {/* Switch Profile */}
         {profiles.length > 1 ? (
           <TouchableOpacity
-            style={[s.profileActionBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            style={st.profileActionBtn}
             onPress={() => {
               Alert.alert("Switch Profile", "Sign out and return to the profile picker?", [
                 { text: "Cancel", style: "cancel" },
@@ -646,141 +641,176 @@ export default function SettingsScreen() {
             }}
             activeOpacity={0.7}
           >
-            <MaterialIcons name="swap-horiz" size={22} color={colors.primary} />
-            <Text style={[s.profileActionText, { color: colors.primary }]}>Switch Profile</Text>
+            <MaterialIcons name="swap-horiz" size={22} color={BLUE} />
+            <Text style={[st.profileActionText, { color: BLUE }]}>Switch Profile</Text>
           </TouchableOpacity>
         ) : null}
 
-        {/* Sign Out */}
         <TouchableOpacity
-          style={[s.profileActionBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          style={st.profileActionBtn}
           onPress={handleSignOut}
           activeOpacity={0.7}
         >
-          <MaterialIcons name="logout" size={22} color={colors.warning} />
-          <Text style={[s.profileActionText, { color: colors.warning }]}>Sign Out</Text>
+          <MaterialIcons name="logout" size={22} color={WARN} />
+          <Text style={[st.profileActionText, { color: WARN }]}>Sign Out</Text>
         </TouchableOpacity>
 
-        {/* Delete Profile */}
         <TouchableOpacity
-          style={[s.profileActionBtn, { backgroundColor: colors.surface, borderColor: colors.error + "20" }]}
+          style={[st.profileActionBtn, { borderColor: RED + "30" }]}
           onPress={handleDeleteProfile}
           activeOpacity={0.7}
         >
-          <MaterialIcons name="delete-forever" size={22} color={colors.error} />
-          <Text style={[s.profileActionText, { color: colors.error }]}>Delete This Profile</Text>
+          <MaterialIcons name="delete-forever" size={22} color={RED} />
+          <Text style={[st.profileActionText, { color: RED }]}>Delete This Profile</Text>
         </TouchableOpacity>
 
-        {/* Version */}
-        <Text style={[s.version, { color: colors.muted }]}>Driver v2.0.0</Text>
-        <Text style={[s.brand, { color: colors.muted }]}>Powered by Agilasoft Cloud Technologies Inc.</Text>
+        <Text style={st.version}>Driver v2.0.0</Text>
+        <Text style={st.brand}>Powered by Agilasoft Cloud Technologies Inc.</Text>
       </ScrollView>
     </ScreenContainer>
   );
 }
 
-function ThemeOption({ label, icon, selected, onPress, colors }: {
-  label: string; icon: string; selected: boolean; onPress: () => void; colors: any;
+function ThemeOption({ label, icon, selected, onPress }: {
+  label: string; icon: string; selected: boolean; onPress: () => void;
 }) {
   return (
-    <TouchableOpacity style={s.themeRow} onPress={onPress} activeOpacity={0.7}>
-      <MaterialIcons name={icon as any} size={22} color={selected ? colors.primary : colors.muted} />
-      <Text style={[s.themeLabel, { color: selected ? colors.primary : colors.foreground }]}>{label}</Text>
+    <TouchableOpacity style={st.themeRow} onPress={onPress} activeOpacity={0.7}>
+      <MaterialIcons name={icon as any} size={22} color={selected ? BLUE : GRAY} />
+      <Text style={[st.themeLabel, { color: selected ? BLUE : FG }]}>{label}</Text>
       {selected ? (
-        <MaterialIcons name="check-circle" size={22} color={colors.primary} />
+        <MaterialIcons name="check-circle" size={22} color={BLUE} />
       ) : (
-        <MaterialIcons name="radio-button-unchecked" size={22} color={colors.border} />
+        <MaterialIcons name="radio-button-unchecked" size={22} color={BORDER} />
       )}
     </TouchableOpacity>
   );
 }
 
-function SettingRow({ icon, iconColor, label, value, valueColor, colors }: {
-  icon: string; iconColor: string; label: string; value: string; valueColor?: string; colors: any;
+function SettingRow({ icon, iconColor, label, value, valueColor }: {
+  icon: string; iconColor: string; label: string; value: string; valueColor?: string;
 }) {
   return (
-    <View style={s.settingRow}>
+    <View style={st.settingRow}>
       <MaterialIcons name={icon as any} size={22} color={iconColor} />
-      <Text style={[s.settingLabel, { color: colors.foreground }]}>{label}</Text>
-      <Text style={[s.settingValue, { color: valueColor || colors.muted }]}>{value}</Text>
+      <Text style={st.settingLabel}>{label}</Text>
+      <Text style={[st.settingValue, { color: valueColor || GRAY }]}>{value}</Text>
     </View>
   );
 }
 
-const s = StyleSheet.create({
-  pageTitle: { fontSize: 28, fontWeight: "800", marginBottom: 20, marginTop: 8 },
-  card: { borderRadius: 20, padding: 20, borderWidth: 1, marginBottom: 16 },
+const st = StyleSheet.create({
+  // Header
+  gradientHeader: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 16,
+  },
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    letterSpacing: -0.5,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.7)",
+    marginTop: 2,
+  },
+
+  // Cards
+  card: {
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 16,
+    backgroundColor: "#FFFFFF",
+    ...Platform.select({
+      ios: { shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 6 },
+      android: { elevation: 2 },
+      web: { shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 6 },
+    }),
+  },
   userRow: { flexDirection: "row", alignItems: "center", gap: 14 },
   avatar: { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center" },
   avatarText: { color: "#fff", fontSize: 20, fontWeight: "700" },
-  userName: { fontSize: 17, fontWeight: "700" },
-  userEmail: { fontSize: 14, marginTop: 2 },
+  userName: { fontSize: 17, fontWeight: "700", color: FG },
+  userEmail: { fontSize: 14, color: GRAY, marginTop: 2 },
   profileCount: { fontSize: 12, fontWeight: "600", marginTop: 4 },
-  divider: { height: 0.5, marginVertical: 14 },
+  divider: { height: 0.5, marginVertical: 14, backgroundColor: BORDER },
   infoRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 6 },
-  infoText: { fontSize: 14, flex: 1 },
-  infoTextWarn: { fontSize: 13, flex: 1, lineHeight: 19 },
+  infoText: { fontSize: 14, flex: 1, color: GRAY },
   diagLink: { flexDirection: "row", alignItems: "center", gap: 6, marginLeft: 28 },
-  diagText: { fontSize: 13, textDecorationLine: "underline" },
+  diagText: { fontSize: 13, textDecorationLine: "underline", color: GRAY },
   retryBtn: { flexDirection: "row", alignItems: "center", gap: 6, marginLeft: 28, marginTop: 2 },
   retryText: { fontSize: 14, fontWeight: "600" },
-  sectionLabel: { fontSize: 13, fontWeight: "700", marginBottom: 8, marginLeft: 4, letterSpacing: 0.5 },
+  sectionLabel: { fontSize: 13, fontWeight: "700", marginBottom: 8, marginLeft: 4, letterSpacing: 0.5, color: GRAY },
+
   // Security
   securityRow: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 20, paddingVertical: 18 },
-  securityLabel: { fontSize: 15, fontWeight: "600" },
-  securityDesc: { fontSize: 12, marginTop: 2 },
+  securityLabel: { fontSize: 15, fontWeight: "600", color: FG },
+  securityDesc: { fontSize: 12, marginTop: 2, color: GRAY },
   statusDot: { width: 10, height: 10, borderRadius: 5 },
-  pinSetupArea: { paddingHorizontal: 20, paddingBottom: 20, gap: 12, borderTopWidth: 0.5 },
-  pinSetupTitle: { fontSize: 15, fontWeight: "700", marginTop: 12 },
-  pinInput: { height: 52, borderRadius: 14, borderWidth: 1, paddingHorizontal: 20, fontSize: 20, textAlign: "center", letterSpacing: 6, fontWeight: "600" },
-  pinErrorText: { fontSize: 13, textAlign: "center" },
+  pinSetupArea: { paddingHorizontal: 20, paddingBottom: 20, gap: 12, borderTopWidth: 0.5, borderTopColor: BORDER },
+  pinSetupTitle: { fontSize: 15, fontWeight: "700", marginTop: 12, color: FG },
+  pinInput: { height: 52, borderRadius: 12, borderWidth: 1, paddingHorizontal: 20, fontSize: 20, textAlign: "center", letterSpacing: 6, fontWeight: "600", backgroundColor: SURFACE, color: FG },
+  pinErrorText: { fontSize: 13, textAlign: "center", color: RED },
   pinActions: { flexDirection: "row", gap: 12, marginTop: 4 },
-  pinCancelBtn: { flex: 1, height: 48, borderRadius: 14, borderWidth: 1, alignItems: "center", justifyContent: "center" },
-  pinCancelText: { fontSize: 15, fontWeight: "600" },
-  pinSaveBtn: { flex: 1, height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  pinCancelBtn: { flex: 1, height: 48, borderRadius: 12, borderWidth: 1, borderColor: BORDER, alignItems: "center", justifyContent: "center" },
+  pinCancelText: { fontSize: 15, fontWeight: "600", color: GRAY },
+  pinSaveBtn: { flex: 1, height: 48, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   pinSaveText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+
   // Configuration
   configHeader: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 20, paddingVertical: 18 },
-  configTitle: { fontSize: 15, fontWeight: "600" },
-  configSubtitle: { fontSize: 13, marginTop: 2 },
-  configBody: { paddingHorizontal: 20, paddingBottom: 20, gap: 16, borderTopWidth: 0.5 },
+  configTitle: { fontSize: 15, fontWeight: "600", color: FG },
+  configSubtitle: { fontSize: 13, marginTop: 2, color: GRAY },
+  configBody: { paddingHorizontal: 20, paddingBottom: 20, gap: 16, borderTopWidth: 0.5, borderTopColor: BORDER },
   scanQrBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12,
-    paddingVertical: 18, borderRadius: 14, borderWidth: 2, borderStyle: "dashed", marginTop: 14,
+    paddingVertical: 18, borderRadius: 12, borderWidth: 2, borderStyle: "dashed", borderColor: BLUE, backgroundColor: SURFACE, marginTop: 14,
   },
   scanQrText: { fontSize: 15, fontWeight: "700" },
   orDivider: { flexDirection: "row", alignItems: "center", gap: 12 },
-  orLine: { flex: 1, height: 0.5 },
-  orText: { fontSize: 12, fontWeight: "500" },
+  orLine: { flex: 1, height: 0.5, backgroundColor: BORDER },
+  orText: { fontSize: 12, fontWeight: "500", color: GRAY },
   fieldGroup: { gap: 8 },
-  fieldLabel: { fontSize: 13, fontWeight: "600", marginLeft: 2 },
-  inputRow: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, height: 52, gap: 10 },
-  input: { flex: 1, fontSize: 15, height: 52 },
+  fieldLabel: { fontSize: 13, fontWeight: "600", marginLeft: 2, color: GRAY },
+  inputRow: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, height: 50, gap: 10, borderColor: BORDER, backgroundColor: SURFACE },
+  input: { flex: 1, fontSize: 15, height: 50, color: FG },
   eyeBtn: { padding: 6 },
   messageBox: { flexDirection: "row", alignItems: "flex-start", gap: 10, padding: 14, borderRadius: 12, borderWidth: 1 },
   messageText: { flex: 1, fontSize: 13, lineHeight: 19, fontWeight: "500" },
   configActions: { flexDirection: "row", gap: 10, marginTop: 4 },
-  configBtn: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 18, paddingVertical: 14, borderRadius: 14, borderWidth: 1 },
+  configBtn: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 18, paddingVertical: 14, borderRadius: 12, borderWidth: 1, borderColor: BORDER },
   configBtnPrimary: { flex: 1, justifyContent: "center", borderWidth: 0 },
   configBtnText: { fontSize: 14, fontWeight: "700" },
-  hintBox: { flexDirection: "row", alignItems: "flex-start", gap: 10, padding: 14, borderRadius: 12, borderWidth: 0.5 },
-  hintText: { flex: 1, fontSize: 12, lineHeight: 18 },
+  hintBox: { flexDirection: "row", alignItems: "flex-start", gap: 10, padding: 14, borderRadius: 12, backgroundColor: SURFACE, borderWidth: 0.5, borderColor: BORDER },
+  hintText: { flex: 1, fontSize: 12, lineHeight: 18, color: GRAY },
+
   // Settings rows
   settingRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, paddingVertical: 16 },
-  settingLabel: { fontSize: 15, flex: 1 },
+  settingLabel: { fontSize: 15, flex: 1, color: FG },
   settingValue: { fontSize: 15, fontWeight: "600" },
-  rowDivider: { height: 0.5, marginHorizontal: 20 },
+  rowDivider: { height: 0.5, marginHorizontal: 20, backgroundColor: BORDER },
   actionRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, paddingVertical: 16 },
   actionText: { fontSize: 15, fontWeight: "600", flex: 1 },
+
   // Profile actions
   profileActionBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
-    borderRadius: 20, borderWidth: 1, paddingVertical: 18, marginBottom: 12,
+    borderRadius: 12, borderWidth: 1, borderColor: BORDER, paddingVertical: 18, marginBottom: 12,
+    backgroundColor: "#FFFFFF",
+    ...Platform.select({
+      ios: { shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4 },
+      android: { elevation: 1 },
+      web: { shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4 },
+    }),
   },
   profileActionText: { fontSize: 16, fontWeight: "700" },
+
   // Theme rows
   themeRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, paddingVertical: 16 },
   themeLabel: { fontSize: 15, fontWeight: "600", flex: 1 },
-  version: { fontSize: 13, textAlign: "center", marginTop: 12 },
-  brand: { fontSize: 12, textAlign: "center", marginTop: 4 },
+  version: { fontSize: 13, textAlign: "center", marginTop: 12, color: GRAY },
+  brand: { fontSize: 12, textAlign: "center", marginTop: 4, color: GRAY },
 });

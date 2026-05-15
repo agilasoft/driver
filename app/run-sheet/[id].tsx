@@ -8,13 +8,13 @@ import {
   ActivityIndicator,
   Alert,
   StyleSheet,
+  Platform,
 } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { ScreenContainer } from "@/components/screen-container";
 import { ConnectivityBanner } from "@/components/connectivity-banner";
 import { StatusBadge } from "@/components/status-badge";
-import { useColors } from "@/hooks/use-colors";
 import { useSync } from "@/lib/sync-context";
 import type { RunSheetBundle, TransportLeg } from "@/lib/types";
 import {
@@ -28,10 +28,19 @@ import { generateRunSheetPdf } from "@/lib/pdf-generator";
 import { useAuth } from "@/lib/auth-context";
 import { resolveAllLegCoordinates } from "@/lib/geocoding";
 
+const BLUE = "#3478C6";
+const BLUE_LIGHT = "#5B9BD5";
+const ORANGE = "#F27A2E";
+const GREEN = "#34C759";
+const RED = "#FF3B30";
+const WARN = "#FF9500";
+const GRAY = "#8E8E93";
+const BORDER = "#E5E5EA";
+const FG = "#1A1A1A";
+
 export default function RunSheetDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const colors = useColors();
   const { isOnline, refreshPendingCount } = useSync();
   const { auth } = useAuth();
   const [bundle, setBundle] = useState<RunSheetBundle | null>(null);
@@ -39,13 +48,13 @@ export default function RunSheetDetailScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [isResolvingMap, setIsResolvingMap] = useState(false);
 
   const loadData = useCallback(
     async (showRefresh = false) => {
       if (!id) return;
       if (showRefresh) setIsRefreshing(true);
       else setIsLoading(true);
-
       try {
         if (isOnline) {
           try {
@@ -70,25 +79,15 @@ export default function RunSheetDetailScreen() {
     [id, isOnline]
   );
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useEffect(() => { loadData(); }, [loadData]);
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "—";
     try {
       const d = new Date(dateStr);
-      return d.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      });
-    } catch {
-      return dateStr;
-    }
+      return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    } catch { return dateStr; }
   };
-
-  const [isResolvingMap, setIsResolvingMap] = useState(false);
 
   const openRouteMap = async () => {
     if (!bundle || !auth) return;
@@ -100,14 +99,7 @@ export default function RunSheetDetailScreen() {
         "Content-Type": "application/json",
         Accept: "application/json",
       };
-
-      // Resolve coordinates from addresses
-      const resolved = await resolveAllLegCoordinates({
-        legs: bundle.legs,
-        baseUrl,
-        headers,
-      });
-
+      const resolved = await resolveAllLegCoordinates({ legs: bundle.legs, baseUrl, headers });
       const legsJson = JSON.stringify(
         resolved.map((r) => ({
           name: r.legName,
@@ -119,11 +111,8 @@ export default function RunSheetDetailScreen() {
           facilityTo: r.facilityTo,
         }))
       );
-      router.push({
-        pathname: "/route-map",
-        params: { legs: legsJson, title: id || "Route" },
-      });
-    } catch (error) {
+      router.push({ pathname: "/route-map", params: { legs: legsJson, title: id || "Route" } });
+    } catch {
       Alert.alert("Error", "Failed to resolve route addresses. Please try again.");
     } finally {
       setIsResolvingMap(false);
@@ -142,13 +131,8 @@ export default function RunSheetDetailScreen() {
           onPress: async () => {
             const Sharing = await import("expo-sharing");
             if (await Sharing.isAvailableAsync()) {
-              await Sharing.shareAsync(fileUri, {
-                mimeType: "application/pdf",
-                dialogTitle: `Share ${fileName}`,
-              });
-            } else {
-              Alert.alert("Sharing not available on this device");
-            }
+              await Sharing.shareAsync(fileUri, { mimeType: "application/pdf", dialogTitle: `Share ${fileName}` });
+            } else { Alert.alert("Sharing not available on this device"); }
           },
         },
         {
@@ -169,92 +153,55 @@ export default function RunSheetDetailScreen() {
 
   const handleStatusUpdate = (newStatus: string) => {
     if (!bundle) return;
-    Alert.alert(
-      "Update Status",
-      `Change status to "${newStatus}"?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Confirm",
-          onPress: async () => {
-            setIsUpdatingStatus(true);
-            try {
-              if (isOnline) {
-                await updateRunSheetStatus(id!, newStatus);
-                await loadData(true);
-                Alert.alert("Success", `Status updated to ${newStatus}`);
-              } else {
-                const change = {
-                  runSheetName: id!,
-                  status: newStatus,
-                  timestamp: new Date().toISOString(),
-                };
-                await addPendingStatusChange(change);
-                await applyLocalStatusChange(id!, newStatus);
-                await refreshPendingCount();
-                const updatedBundle = await getCachedBundle(id!);
-                if (updatedBundle) setBundle(updatedBundle);
-                Alert.alert("Queued", "Status change will sync when online.");
-              }
-            } catch (error: any) {
-              Alert.alert("Error", error.message || "Failed to update status.");
-            } finally {
-              setIsUpdatingStatus(false);
+    Alert.alert("Update Status", `Change status to "${newStatus}"?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Confirm",
+        onPress: async () => {
+          setIsUpdatingStatus(true);
+          try {
+            if (isOnline) {
+              await updateRunSheetStatus(id!, newStatus);
+              await loadData(true);
+              Alert.alert("Success", `Status updated to ${newStatus}`);
+            } else {
+              const change = { runSheetName: id!, status: newStatus, timestamp: new Date().toISOString() };
+              await addPendingStatusChange(change);
+              await applyLocalStatusChange(id!, newStatus);
+              await refreshPendingCount();
+              const updatedBundle = await getCachedBundle(id!);
+              if (updatedBundle) setBundle(updatedBundle);
+              Alert.alert("Queued", "Status change will sync when online.");
             }
-          },
+          } catch (error: any) {
+            Alert.alert("Error", error.message || "Failed to update status.");
+          } finally {
+            setIsUpdatingStatus(false);
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const renderStatusActions = (currentStatus: string) => {
     const transitions: { label: string; status: string; icon: string; color: string }[] = [];
-
     if (currentStatus === "Dispatched" || currentStatus === "Draft") {
-      transitions.push({
-        label: "Start Trip",
-        status: "In-Progress",
-        icon: "play-arrow",
-        color: colors.warning,
-      });
+      transitions.push({ label: "Start Trip", status: "In-Progress", icon: "play-arrow", color: ORANGE });
     }
     if (currentStatus === "In-Progress") {
-      transitions.push({
-        label: "Complete",
-        status: "Completed",
-        icon: "check-circle",
-        color: colors.success,
-      });
-      transitions.push({
-        label: "Hold",
-        status: "Hold",
-        icon: "pause-circle-filled",
-        color: colors.warning,
-      });
+      transitions.push({ label: "Complete", status: "Completed", icon: "check-circle", color: GREEN });
+      transitions.push({ label: "Hold", status: "Hold", icon: "pause-circle-filled", color: WARN });
     }
     if (currentStatus === "Hold") {
-      transitions.push({
-        label: "Resume",
-        status: "In-Progress",
-        icon: "play-arrow",
-        color: colors.primary,
-      });
+      transitions.push({ label: "Resume", status: "In-Progress", icon: "play-arrow", color: BLUE });
     }
-
     if (transitions.length === 0) return null;
-
     return (
-      <View style={styles.statusActionsRow}>
+      <View style={st.statusActionsRow}>
         {transitions.map((t) => (
           <TouchableOpacity
             key={t.status}
-            style={[
-              styles.statusBtn,
-              {
-                backgroundColor: t.color,
-                opacity: isUpdatingStatus ? 0.6 : 1,
-              },
-            ]}
+            style={[st.statusBtn, { backgroundColor: t.color, opacity: isUpdatingStatus ? 0.6 : 1 }]}
             onPress={() => handleStatusUpdate(t.status)}
             activeOpacity={0.8}
             disabled={isUpdatingStatus}
@@ -264,7 +211,7 @@ export default function RunSheetDetailScreen() {
             ) : (
               <>
                 <MaterialIcons name={t.icon as any} size={18} color="#fff" />
-                <Text style={styles.statusBtnText}>{t.label}</Text>
+                <Text style={st.statusBtnText}>{t.label}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -281,99 +228,54 @@ export default function RunSheetDetailScreen() {
 
     return (
       <TouchableOpacity
-        onPress={() =>
-          router.push({
-            pathname: "/leg/[legId]",
-            params: {
-              legId: item.name,
-              runSheetId: id || "",
-            },
-          })
-        }
+        onPress={() => router.push({ pathname: "/leg/[legId]", params: { legId: item.name, runSheetId: id || "" } })}
         activeOpacity={0.7}
         style={[
-          styles.legCard,
+          st.legCard,
           {
-            backgroundColor: colors.surface,
-            borderColor: isComplete
-              ? colors.success
-              : isPartial
-              ? colors.warning
-              : colors.border,
-            borderWidth: isComplete || isPartial ? 1.5 : 1,
+            borderLeftColor: isComplete ? GREEN : isPartial ? WARN : BLUE,
+            borderLeftWidth: 4,
           },
         ]}
       >
-        {/* Leg number badge + status */}
-        <View style={styles.legHeader}>
-          <View
-            style={[
-              styles.legBadge,
-              {
-                backgroundColor: isComplete
-                  ? colors.success
-                  : isPartial
-                  ? colors.warning
-                  : colors.primary,
-              },
-            ]}
-          >
-            <Text style={styles.legBadgeText}>{index + 1}</Text>
+        <View style={st.legHeader}>
+          <View style={[st.legBadge, { backgroundColor: isComplete ? GREEN : isPartial ? WARN : BLUE }]}>
+            <Text style={st.legBadgeText}>{index + 1}</Text>
           </View>
-          <View style={styles.legHeaderText}>
-            <Text
-              style={[styles.legTitle, { color: colors.foreground }]}
-              numberOfLines={1}
-            >
+          <View style={st.legHeaderText}>
+            <Text style={st.legTitle} numberOfLines={1}>
               {item.facility_from || "Origin"} → {item.facility_to || "Destination"}
             </Text>
-            <Text style={[styles.legSubtitle, { color: colors.muted }]}>
-              {item.name}
-            </Text>
+            <Text style={st.legSubtitle}>{item.name}</Text>
           </View>
-          <View style={styles.legStatusIcons}>
-            {/* Pick status */}
-            <View style={styles.legStatusIcon}>
-              <MaterialIcons
-                name="trip-origin"
-                size={16}
-                color={hasPickData ? colors.success : colors.border}
-              />
-            </View>
-            {/* Drop status */}
-            <View style={styles.legStatusIcon}>
-              <MaterialIcons
-                name="place"
-                size={16}
-                color={hasDropData ? colors.success : colors.border}
-              />
-            </View>
+          <View style={st.legStatusIcons}>
+            <MaterialIcons name="trip-origin" size={16} color={hasPickData ? GREEN : BORDER} />
+            <MaterialIcons name="place" size={16} color={hasDropData ? GREEN : BORDER} />
           </View>
-          <MaterialIcons name="chevron-right" size={22} color={colors.border} />
+          <MaterialIcons name="chevron-right" size={22} color="#C7C7CC" />
         </View>
 
-        {/* Info row */}
-        <View style={styles.legInfoRow}>
+        <View style={st.legInfoRow}>
           {item.start_date ? (
-            <View style={[styles.legInfoChip, { backgroundColor: colors.background }]}>
-              <MaterialIcons name="schedule" size={12} color={colors.success} />
-              <Text style={[styles.legInfoText, { color: colors.muted }]}>
+            <View style={st.legInfoChip}>
+              <MaterialIcons name="schedule" size={12} color={GREEN} />
+              <Text style={st.legInfoText}>
                 Pick: {new Date(item.start_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
               </Text>
             </View>
           ) : null}
           {item.end_date ? (
-            <View style={[styles.legInfoChip, { backgroundColor: colors.background }]}>
-              <MaterialIcons name="schedule" size={12} color={colors.error} />
-              <Text style={[styles.legInfoText, { color: colors.muted }]}>
+            <View style={st.legInfoChip}>
+              <MaterialIcons name="schedule" size={12} color={RED} />
+              <Text style={st.legInfoText}>
                 Drop: {new Date(item.end_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
               </Text>
             </View>
           ) : null}
           {item.pick_signature ? (
-            <View style={[styles.legInfoChip, { backgroundColor: colors.background }]}>
-              <MaterialIcons name="draw" size={12} color={colors.success} />
-              <Text style={[styles.legInfoText, { color: colors.muted }]}>Signed</Text>
+            <View style={st.legInfoChip}>
+              <MaterialIcons name="draw" size={12} color={GREEN} />
+              <Text style={st.legInfoText}>Signed</Text>
             </View>
           ) : null}
         </View>
@@ -385,86 +287,49 @@ export default function RunSheetDetailScreen() {
     if (!bundle) return null;
     const doc = bundle.doc;
     return (
-      <View style={styles.headerContainer}>
-        {/* Run sheet info card */}
-        <View
-          style={[
-            styles.infoCard,
-            { backgroundColor: colors.surface, borderColor: colors.border },
-          ]}
-        >
-          <View style={styles.infoCardHeader}>
-            <Text style={[styles.infoCardTitle, { color: colors.foreground }]}>
-              {doc.name}
-            </Text>
+      <View style={st.headerContainer}>
+        <View style={st.infoCard}>
+          <View style={st.infoCardHeader}>
+            <Text style={st.infoCardTitle}>{doc.name}</Text>
             <StatusBadge status={doc.status} />
           </View>
 
-          {doc.route_name ? (
-            <Text
-              style={[styles.routeName, { color: colors.foreground }]}
-              numberOfLines={1}
-            >
-              {doc.route_name}
-            </Text>
-          ) : null}
+          {doc.route_name ? <Text style={st.routeName} numberOfLines={1}>{doc.route_name}</Text> : null}
 
-          <View style={styles.infoGrid}>
-            <InfoRow icon="event" label="Date" value={formatDate(doc.run_date)} colors={colors} />
-            <InfoRow icon="label" label="Type" value={doc.run_type} colors={colors} />
-            <InfoRow icon="local-shipping" label="Vehicle" value={doc.vehicle || "—"} colors={colors} />
-            <InfoRow icon="person" label="Driver" value={doc.driver_name || "—"} colors={colors} />
-            {doc.dispatch_terminal ? (
-              <InfoRow icon="warehouse" label="Dispatch" value={doc.dispatch_terminal} colors={colors} />
-            ) : null}
+          <View style={st.infoGrid}>
+            <InfoRow icon="event" label="Date" value={formatDate(doc.run_date)} />
+            <InfoRow icon="label" label="Type" value={doc.run_type} />
+            <InfoRow icon="local-shipping" label="Vehicle" value={doc.vehicle || "—"} />
+            <InfoRow icon="person" label="Driver" value={doc.driver_name || "—"} />
+            {doc.dispatch_terminal ? <InfoRow icon="warehouse" label="Dispatch" value={doc.dispatch_terminal} /> : null}
           </View>
 
-          {/* Action Buttons */}
-          <View style={styles.actionRow}>
+          <View style={st.actionRow}>
             <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: colors.primary, opacity: isResolvingMap ? 0.7 : 1 }]}
+              style={[st.actionBtn, { backgroundColor: BLUE, opacity: isResolvingMap ? 0.7 : 1 }]}
               onPress={openRouteMap}
               activeOpacity={0.8}
               disabled={isResolvingMap}
             >
-              {isResolvingMap ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <MaterialIcons name="map" size={20} color="#fff" />
-              )}
-              <Text style={styles.actionBtnText}>{isResolvingMap ? "Loading..." : "Route Map"}</Text>
+              {isResolvingMap ? <ActivityIndicator size="small" color="#fff" /> : <MaterialIcons name="map" size={20} color="#fff" />}
+              <Text style={st.actionBtnText}>{isResolvingMap ? "Loading..." : "Route Map"}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[
-                styles.actionBtn,
-                {
-                  backgroundColor: "#E67E22",
-                  opacity: isGeneratingPdf ? 0.6 : 1,
-                },
-              ]}
+              style={[st.actionBtn, { backgroundColor: ORANGE, opacity: isGeneratingPdf ? 0.6 : 1 }]}
               onPress={handleExportPdf}
               activeOpacity={0.8}
               disabled={isGeneratingPdf}
             >
-              {isGeneratingPdf ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <MaterialIcons name="picture-as-pdf" size={20} color="#fff" />
-              )}
-              <Text style={styles.actionBtnText}>
-                {isGeneratingPdf ? "..." : "PDF"}
-              </Text>
+              {isGeneratingPdf ? <ActivityIndicator size="small" color="#fff" /> : <MaterialIcons name="picture-as-pdf" size={20} color="#fff" />}
+              <Text style={st.actionBtnText}>{isGeneratingPdf ? "..." : "PDF"}</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Status Update Actions */}
           {renderStatusActions(doc.status)}
         </View>
 
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-          Transport Legs ({bundle.legs.length})
-        </Text>
+        <Text style={st.sectionTitle}>Transport Legs ({bundle.legs.length})</Text>
       </View>
     );
   };
@@ -475,25 +340,23 @@ export default function RunSheetDetailScreen() {
         options={{
           title: id || "Run Sheet",
           headerBackTitle: "Back",
-          headerStyle: { backgroundColor: colors.background },
-          headerTintColor: colors.primary,
-          headerTitleStyle: { color: colors.foreground, fontSize: 17, fontWeight: "600" },
+          headerStyle: { backgroundColor: BLUE },
+          headerTintColor: "#FFFFFF",
+          headerTitleStyle: { color: "#FFFFFF", fontSize: 17, fontWeight: "600" },
         }}
       />
-      <ScreenContainer edges={["left", "right"]}>
+      <ScreenContainer edges={["left", "right"]} containerClassName="bg-white">
         <ConnectivityBanner />
 
         {isLoading ? (
-          <View style={styles.centerContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={[styles.loadingText, { color: colors.muted }]}>Loading...</Text>
+          <View style={st.centerContainer}>
+            <ActivityIndicator size="large" color={BLUE} />
+            <Text style={st.loadingText}>Loading...</Text>
           </View>
         ) : !bundle ? (
-          <View style={styles.centerContainer}>
-            <MaterialIcons name="error-outline" size={48} color={colors.border} />
-            <Text style={[styles.errorText, { color: colors.muted }]}>
-              Could not load run sheet
-            </Text>
+          <View style={st.centerContainer}>
+            <MaterialIcons name="error-outline" size={48} color={BORDER} />
+            <Text style={st.errorText}>Could not load run sheet</Text>
           </View>
         ) : (
           <FlatList
@@ -503,12 +366,9 @@ export default function RunSheetDetailScreen() {
             ListHeaderComponent={renderHeader}
             contentContainerStyle={{ paddingTop: 16, paddingBottom: 32 }}
             refreshControl={
-              <RefreshControl
-                refreshing={isRefreshing}
-                onRefresh={() => loadData(true)}
-                tintColor={colors.primary}
-              />
+              <RefreshControl refreshing={isRefreshing} onRefresh={() => loadData(true)} tintColor={BLUE} />
             }
+            style={{ backgroundColor: "#FFFFFF" }}
           />
         )}
       </ScreenContainer>
@@ -516,192 +376,59 @@ export default function RunSheetDetailScreen() {
   );
 }
 
-function InfoRow({
-  icon,
-  label,
-  value,
-  colors,
-}: {
-  icon: string;
-  label: string;
-  value: string;
-  colors: any;
-}) {
+function InfoRow({ icon, label, value }: { icon: string; label: string; value: string }) {
   return (
-    <View style={styles.infoRow2}>
-      <MaterialIcons name={icon as any} size={18} color={colors.muted} />
-      <Text style={[styles.infoLabel, { color: colors.muted }]}>{label}</Text>
-      <Text style={[styles.infoValue, { color: colors.foreground }]} numberOfLines={1}>
-        {value}
-      </Text>
+    <View style={st.infoRow2}>
+      <MaterialIcons name={icon as any} size={18} color={GRAY} />
+      <Text style={st.infoLabel}>{label}</Text>
+      <Text style={st.infoValue} numberOfLines={1}>{value}</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  headerContainer: {
-    paddingHorizontal: 16,
-    marginBottom: 8,
-  },
+const st = StyleSheet.create({
+  headerContainer: { paddingHorizontal: 16, marginBottom: 8 },
   infoCard: {
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 1,
+    borderRadius: 12, padding: 20, backgroundColor: "#FFFFFF",
+    ...Platform.select({
+      ios: { shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 6 },
+      android: { elevation: 2 },
+      web: { shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 6 },
+    }),
   },
-  infoCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  infoCardTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    flex: 1,
-    marginRight: 12,
-  },
-  routeName: {
-    fontSize: 15,
-    fontWeight: "500",
-    marginBottom: 14,
-  },
-  infoGrid: {
-    gap: 8,
-  },
-  infoRow2: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  infoLabel: {
-    fontSize: 13,
-    width: 64,
-    fontWeight: "500",
-  },
-  infoValue: {
-    fontSize: 14,
-    fontWeight: "600",
-    flex: 1,
-  },
-  actionRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 16,
-  },
-  actionBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: 14,
-  },
-  actionBtnText: {
-    color: "#fff",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  statusActionsRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 12,
-  },
-  statusBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 14,
-    borderRadius: 14,
-  },
-  statusBtnText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    marginTop: 24,
-    marginBottom: 8,
-    marginLeft: 4,
-  },
+  infoCardHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 },
+  infoCardTitle: { fontSize: 20, fontWeight: "800", flex: 1, marginRight: 12, color: FG },
+  routeName: { fontSize: 15, fontWeight: "500", marginBottom: 14, color: FG },
+  infoGrid: { gap: 8 },
+  infoRow2: { flexDirection: "row", alignItems: "center", gap: 8 },
+  infoLabel: { fontSize: 13, width: 64, fontWeight: "500", color: GRAY },
+  infoValue: { fontSize: 14, fontWeight: "600", flex: 1, color: FG },
+  actionRow: { flexDirection: "row", gap: 10, marginTop: 16 },
+  actionBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14, borderRadius: 12 },
+  actionBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+  statusActionsRow: { flexDirection: "row", gap: 8, marginTop: 12 },
+  statusBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 14, borderRadius: 12 },
+  statusBtnText: { color: "#fff", fontSize: 14, fontWeight: "700" },
+  sectionTitle: { fontSize: 17, fontWeight: "700", marginTop: 24, marginBottom: 8, marginLeft: 4, color: FG },
   legCard: {
-    borderRadius: 16,
-    padding: 16,
-    marginHorizontal: 16,
-    marginBottom: 10,
+    borderRadius: 12, padding: 16, marginHorizontal: 16, marginBottom: 8, backgroundColor: "#FFFFFF",
+    ...Platform.select({
+      ios: { shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4 },
+      android: { elevation: 1 },
+      web: { shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4 },
+    }),
   },
-  legHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  legBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  legBadgeText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "800",
-  },
-  legHeaderText: {
-    flex: 1,
-  },
-  legTitle: {
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  legSubtitle: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  legStatusIcons: {
-    flexDirection: "row",
-    gap: 4,
-  },
-  legStatusIcon: {
-    width: 24,
-    height: 24,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  legInfoRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-    marginTop: 10,
-    paddingLeft: 44,
-  },
-  legInfoChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  legInfoText: {
-    fontSize: 11,
-    fontWeight: "500",
-  },
-  centerContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  loadingText: {
-    fontSize: 14,
-    marginTop: 12,
-  },
-  errorText: {
-    fontSize: 15,
-    marginTop: 16,
-  },
+  legHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
+  legBadge: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
+  legBadgeText: { color: "#fff", fontSize: 14, fontWeight: "800" },
+  legHeaderText: { flex: 1 },
+  legTitle: { fontSize: 15, fontWeight: "600", color: FG },
+  legSubtitle: { fontSize: 12, marginTop: 2, color: GRAY },
+  legStatusIcons: { flexDirection: "row", gap: 4 },
+  legInfoRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10, paddingLeft: 44 },
+  legInfoChip: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: "#F5F5F7" },
+  legInfoText: { fontSize: 11, fontWeight: "500", color: GRAY },
+  centerContainer: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#FFFFFF" },
+  loadingText: { fontSize: 14, marginTop: 12, color: GRAY },
+  errorText: { fontSize: 15, marginTop: 16, color: GRAY },
 });
