@@ -71,18 +71,6 @@ function AppNavigator() {
     return () => subscription.remove();
   }, [auth?.isLoggedIn, router]);
 
-  if (isLoading) {
-    return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#FFFFFF" }}>
-        <ActivityIndicator size="large" color="#3478C6" />
-      </View>
-    );
-  }
-
-  // Navigation flow:
-  // 1. Profile picker is ALWAYS the home/landing screen (like CargoNext hosts list)
-  // 2. When a profile is unlocked (PIN/biometric), activeProfile is set → show tabs
-  // 3. Login screen is a modal pushed from profile picker to add new profiles
   // Auto-lock on session timeout
   useEffect(() => {
     if (isTimedOut && auth?.isLoggedIn && activeProfile) {
@@ -93,6 +81,14 @@ function AppNavigator() {
   }, [isTimedOut, auth?.isLoggedIn, activeProfile, signOut, router]);
 
   const isUnlocked = auth?.isLoggedIn && activeProfile && !isTimedOut;
+
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#FFFFFF" }}>
+        <ActivityIndicator size="large" color="#3478C6" />
+      </View>
+    );
+  }
 
   return (
     <>
