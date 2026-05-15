@@ -39,3 +39,13 @@
 - [x] Update theme to CargoNext blue/orange branding (matching referenced app)
 - [x] Add search bar to run sheets list to filter by name, route, or reference number
 - [x] Fix: Route map and Map tab not working properly
+- [x] Multi-profile system: multiple drivers can share a device with separate configs/credentials
+- [x] Multi-host support: each profile can connect to a different Frappe server
+- [x] PIN authentication to unlock driver profiles
+- [x] Biometric authentication (Face ID / fingerprint) to unlock driver profiles
+- [x] Profile switcher screen to select which driver profile to use
+- [x] Profile management in Settings (add, edit, delete profiles)
+- [ ] Namespace notification cache per profile to prevent cross-profile bleed
+- [ ] Delivery notes/comments field on each transport leg
+- [ ] Dark mode toggle in Settings (manual override)
+- [ ] Leg completion progress bar on run sheet cards

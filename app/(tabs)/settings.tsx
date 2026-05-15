@@ -22,9 +22,14 @@ import {
   startAssignmentPolling,
   stopAssignmentPolling,
 } from "@/lib/notifications";
+import { checkBiometricAvailability } from "@/lib/profile-manager";
 
 export default function SettingsScreen() {
-  const { auth, logout, updateCredentials } = useAuth();
+  const {
+    auth, logout, updateCredentials, signOut,
+    activeProfile, profiles,
+    updateProfilePin, updateProfileBiometric, removeProfile,
+  } = useAuth();
   const { isOnline, pendingCount, isSyncing, lastSync, syncNow } = useSync();
   const colors = useColors();
   const router = useRouter();
@@ -45,6 +50,15 @@ export default function SettingsScreen() {
   const [isTesting, setIsTesting] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  // Security state
+  const [securityExpanded, setSecurityExpanded] = useState(false);
+  const [pinSetup, setPinSetup] = useState(false);
+  const [newPin, setNewPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
+  const [pinError, setPinError] = useState("");
+  const [bioAvailable, setBioAvailable] = useState(false);
+  const [bioType, setBioType] = useState("");
+
   useEffect(() => {
     if (auth) {
       setEditSiteUrl(auth.siteUrl);
@@ -63,11 +77,14 @@ export default function SettingsScreen() {
     }
   }, [params.scannedSiteUrl, params.scannedApiKey, params.scannedApiSecret]);
 
-  const hasChanges = useCallback(() => {
-    if (!auth) return false;
-    const norm = (url: string) => url.trim().replace(/\/+$/, "");
-    return norm(editSiteUrl) !== norm(auth.siteUrl) || editApiKey.trim() !== auth.apiKey || editApiSecret.trim() !== auth.apiSecret;
-  }, [auth, editSiteUrl, editApiKey, editApiSecret]);
+  // Check biometric availability
+  useEffect(() => {
+    (async () => {
+      const bio = await checkBiometricAvailability();
+      setBioAvailable(bio.available);
+      setBioType(bio.type);
+    })();
+  }, []);
 
   const checkNotifPermission = useCallback(async () => {
     if (Platform.OS === "web") return;
@@ -149,11 +166,68 @@ export default function SettingsScreen() {
 
   const handleScanQR = () => { router.push({ pathname: "/config-scanner", params: { source: "settings" } }); };
 
-  const handleLogout = () => {
-    Alert.alert("Sign Out", "Are you sure you want to sign out?", [
+  const handleSignOut = () => {
+    Alert.alert("Sign Out", "Sign out of this profile? You can switch back from the profile picker.", [
       { text: "Cancel", style: "cancel" },
-      { text: "Sign Out", style: "destructive", onPress: async () => { await logout(); } },
+      { text: "Sign Out", style: "destructive", onPress: async () => { await signOut(); } },
     ]);
+  };
+
+  const handleDeleteProfile = () => {
+    if (!activeProfile) return;
+    Alert.alert(
+      "Delete Profile",
+      "This will permanently remove this profile and all its saved data from this device. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            await removeProfile(activeProfile.id);
+          },
+        },
+      ]
+    );
+  };
+
+  const handleSetPin = async () => {
+    if (!activeProfile) return;
+    if (newPin.length < 4) { setPinError("PIN must be at least 4 digits."); return; }
+    if (newPin !== confirmPin) { setPinError("PINs do not match."); return; }
+    await updateProfilePin(activeProfile.id, newPin);
+    setPinSetup(false);
+    setNewPin("");
+    setConfirmPin("");
+    setPinError("");
+    Alert.alert("PIN Set", "Your profile is now protected with a PIN.");
+  };
+
+  const handleRemovePin = () => {
+    if (!activeProfile) return;
+    Alert.alert("Remove PIN", "Remove PIN protection from this profile?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Remove",
+        style: "destructive",
+        onPress: async () => {
+          await updateProfilePin(activeProfile.id, null);
+          Alert.alert("PIN Removed", "Profile PIN protection has been removed.");
+        },
+      },
+    ]);
+  };
+
+  const handleToggleBiometric = async () => {
+    if (!activeProfile) return;
+    const newValue = !activeProfile.useBiometric;
+    await updateProfileBiometric(activeProfile.id, newValue);
+    Alert.alert(
+      newValue ? "Biometric Enabled" : "Biometric Disabled",
+      newValue
+        ? `${bioType || "Biometric"} authentication is now required to unlock this profile.`
+        : "Biometric authentication has been disabled for this profile."
+    );
   };
 
   const handleSyncNow = async () => {
@@ -169,20 +243,30 @@ export default function SettingsScreen() {
     } catch { return lastSync; }
   };
 
+  const hasPin = !!activeProfile?.pin;
+  const hasBio = !!activeProfile?.useBiometric;
+
   return (
     <ScreenContainer>
       <ScrollView contentContainerStyle={{ paddingBottom: 50, paddingHorizontal: 16, paddingTop: 8 }} keyboardShouldPersistTaps="handled">
         <Text style={[s.pageTitle, { color: colors.foreground }]}>Settings</Text>
 
-        {/* User Info Card */}
+        {/* Profile Card */}
         <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={s.userRow}>
-            <View style={[s.avatar, { backgroundColor: colors.primary }]}>
-              <Text style={s.avatarText}>{(auth?.fullName || auth?.userName || "?").charAt(0).toUpperCase()}</Text>
+            <View style={[s.avatar, { backgroundColor: activeProfile?.avatarColor || colors.primary }]}>
+              <Text style={s.avatarText}>
+                {(auth?.fullName || auth?.userName || "?").split(" ").map(w => w[0]).join("").toUpperCase().substring(0, 2)}
+              </Text>
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[s.userName, { color: colors.foreground }]}>{auth?.fullName || "Unknown User"}</Text>
               <Text style={[s.userEmail, { color: colors.muted }]}>{auth?.userName}</Text>
+              {profiles.length > 1 ? (
+                <Text style={[s.profileCount, { color: colors.primary }]}>
+                  {profiles.length} profiles on this device
+                </Text>
+              ) : null}
             </View>
           </View>
 
@@ -236,6 +320,115 @@ export default function SettingsScreen() {
           )}
         </View>
 
+        {/* Profile Security */}
+        <Text style={[s.sectionLabel, { color: colors.muted }]}>PROFILE SECURITY</Text>
+        <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border, padding: 0, overflow: "hidden" }]}>
+          {/* PIN */}
+          <TouchableOpacity
+            style={s.securityRow}
+            onPress={() => {
+              if (hasPin) {
+                Alert.alert("PIN Protection", "Your profile is protected with a PIN.", [
+                  { text: "Change PIN", onPress: () => { setPinSetup(true); setSecurityExpanded(true); } },
+                  { text: "Remove PIN", style: "destructive", onPress: handleRemovePin },
+                  { text: "Cancel", style: "cancel" },
+                ]);
+              } else {
+                setPinSetup(true);
+                setSecurityExpanded(true);
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons name="pin" size={22} color={hasPin ? colors.success : colors.muted} />
+            <View style={{ flex: 1 }}>
+              <Text style={[s.securityLabel, { color: colors.foreground }]}>PIN Lock</Text>
+              <Text style={[s.securityDesc, { color: colors.muted }]}>
+                {hasPin ? "Enabled — tap to change or remove" : "Tap to set a PIN"}
+              </Text>
+            </View>
+            <View style={[s.statusDot, { backgroundColor: hasPin ? colors.success : colors.border }]} />
+          </TouchableOpacity>
+
+          {pinSetup && securityExpanded && (
+            <View style={[s.pinSetupArea, { borderTopColor: colors.border }]}>
+              <Text style={[s.pinSetupTitle, { color: colors.foreground }]}>
+                {hasPin ? "Change PIN" : "Set PIN"}
+              </Text>
+              <TextInput
+                style={[s.pinInput, { backgroundColor: colors.background, borderColor: pinError ? colors.error : colors.border, color: colors.foreground }]}
+                value={newPin}
+                onChangeText={(t) => { setNewPin(t.replace(/[^0-9]/g, "")); setPinError(""); }}
+                placeholder="Enter new PIN (4-6 digits)"
+                placeholderTextColor={colors.muted}
+                keyboardType="number-pad"
+                secureTextEntry
+                maxLength={6}
+                returnKeyType="next"
+              />
+              <TextInput
+                style={[s.pinInput, { backgroundColor: colors.background, borderColor: pinError ? colors.error : colors.border, color: colors.foreground }]}
+                value={confirmPin}
+                onChangeText={(t) => { setConfirmPin(t.replace(/[^0-9]/g, "")); setPinError(""); }}
+                placeholder="Confirm PIN"
+                placeholderTextColor={colors.muted}
+                keyboardType="number-pad"
+                secureTextEntry
+                maxLength={6}
+                returnKeyType="done"
+                onSubmitEditing={handleSetPin}
+              />
+              {pinError ? <Text style={[s.pinErrorText, { color: colors.error }]}>{pinError}</Text> : null}
+              <View style={s.pinActions}>
+                <TouchableOpacity
+                  style={[s.pinCancelBtn, { borderColor: colors.border }]}
+                  onPress={() => { setPinSetup(false); setNewPin(""); setConfirmPin(""); setPinError(""); setSecurityExpanded(false); }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[s.pinCancelText, { color: colors.muted }]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[s.pinSaveBtn, { backgroundColor: colors.primary }]}
+                  onPress={handleSetPin}
+                  activeOpacity={0.7}
+                >
+                  <Text style={s.pinSaveText}>Save PIN</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          <View style={[s.rowDivider, { backgroundColor: colors.border }]} />
+
+          {/* Biometric */}
+          <TouchableOpacity
+            style={s.securityRow}
+            onPress={() => {
+              if (!bioAvailable) {
+                Alert.alert("Not Available", "Biometric authentication is not available on this device.");
+                return;
+              }
+              handleToggleBiometric();
+            }}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons
+              name="fingerprint"
+              size={22}
+              color={hasBio ? colors.success : (bioAvailable ? colors.muted : colors.border)}
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={[s.securityLabel, { color: bioAvailable ? colors.foreground : colors.muted }]}>
+                {bioType || "Biometric"} Lock
+              </Text>
+              <Text style={[s.securityDesc, { color: colors.muted }]}>
+                {!bioAvailable ? "Not available on this device" : hasBio ? "Enabled — tap to disable" : "Tap to enable"}
+              </Text>
+            </View>
+            <View style={[s.statusDot, { backgroundColor: hasBio ? colors.success : colors.border }]} />
+          </TouchableOpacity>
+        </View>
+
         {/* Configuration */}
         <Text style={[s.sectionLabel, { color: colors.muted }]}>CONFIGURATION</Text>
         <View style={[s.card, { backgroundColor: colors.surface, borderColor: colors.border, padding: 0, overflow: "hidden" }]}>
@@ -254,7 +447,6 @@ export default function SettingsScreen() {
 
           {configExpanded && (
             <View style={[s.configBody, { borderTopColor: colors.border }]}>
-              {/* Scan QR */}
               <TouchableOpacity
                 style={[s.scanQrBtn, { borderColor: colors.primary, backgroundColor: colors.background }]}
                 onPress={handleScanQR}
@@ -270,7 +462,6 @@ export default function SettingsScreen() {
                 <View style={[s.orLine, { backgroundColor: colors.border }]} />
               </View>
 
-              {/* Server URL */}
               <View style={s.fieldGroup}>
                 <Text style={[s.fieldLabel, { color: colors.muted }]}>Server URL</Text>
                 <View style={[s.inputRow, { borderColor: colors.border, backgroundColor: colors.background }]}>
@@ -289,7 +480,6 @@ export default function SettingsScreen() {
                 </View>
               </View>
 
-              {/* API Key */}
               <View style={s.fieldGroup}>
                 <Text style={[s.fieldLabel, { color: colors.muted }]}>API Key</Text>
                 <View style={[s.inputRow, { borderColor: colors.border, backgroundColor: colors.background }]}>
@@ -307,7 +497,6 @@ export default function SettingsScreen() {
                 </View>
               </View>
 
-              {/* API Secret */}
               <View style={s.fieldGroup}>
                 <Text style={[s.fieldLabel, { color: colors.muted }]}>API Secret</Text>
                 <View style={[s.inputRow, { borderColor: colors.border, backgroundColor: colors.background }]}>
@@ -329,7 +518,6 @@ export default function SettingsScreen() {
                 </View>
               </View>
 
-              {/* Status message */}
               {saveMessage && (
                 <View style={[s.messageBox, {
                   backgroundColor: saveMessage.type === "success" ? colors.success + "15" : colors.error + "15",
@@ -346,7 +534,6 @@ export default function SettingsScreen() {
                 </View>
               )}
 
-              {/* Action buttons */}
               <View style={s.configActions}>
                 <TouchableOpacity
                   style={[s.configBtn, { borderColor: colors.border }]}
@@ -378,12 +565,10 @@ export default function SettingsScreen() {
                 </TouchableOpacity>
               </View>
 
-              {/* Hint */}
               <View style={[s.hintBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
                 <MaterialIcons name="info-outline" size={16} color={colors.muted} />
                 <Text style={[s.hintText, { color: colors.muted }]}>
                   Generate API keys in your Frappe site under Settings {">"} API Access. Or scan a QR code from your administrator.
-                  {"\n\n"}To link your Driver record, set the "User" field on your Driver record to your login email.
                 </Text>
               </View>
             </View>
@@ -416,18 +601,48 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Profile Actions */}
+        <Text style={[s.sectionLabel, { color: colors.muted }]}>PROFILE</Text>
+
+        {/* Switch Profile */}
+        {profiles.length > 1 ? (
+          <TouchableOpacity
+            style={[s.profileActionBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            onPress={() => {
+              Alert.alert("Switch Profile", "Sign out and return to the profile picker?", [
+                { text: "Cancel", style: "cancel" },
+                { text: "Switch", onPress: async () => { await signOut(); } },
+              ]);
+            }}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons name="swap-horiz" size={22} color={colors.primary} />
+            <Text style={[s.profileActionText, { color: colors.primary }]}>Switch Profile</Text>
+          </TouchableOpacity>
+        ) : null}
+
         {/* Sign Out */}
         <TouchableOpacity
-          style={[s.signOutBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-          onPress={handleLogout}
+          style={[s.profileActionBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          onPress={handleSignOut}
           activeOpacity={0.7}
         >
-          <MaterialIcons name="logout" size={20} color={colors.error} />
-          <Text style={[s.signOutText, { color: colors.error }]}>Sign Out</Text>
+          <MaterialIcons name="logout" size={22} color={colors.warning} />
+          <Text style={[s.profileActionText, { color: colors.warning }]}>Sign Out</Text>
+        </TouchableOpacity>
+
+        {/* Delete Profile */}
+        <TouchableOpacity
+          style={[s.profileActionBtn, { backgroundColor: colors.surface, borderColor: colors.error + "20" }]}
+          onPress={handleDeleteProfile}
+          activeOpacity={0.7}
+        >
+          <MaterialIcons name="delete-forever" size={22} color={colors.error} />
+          <Text style={[s.profileActionText, { color: colors.error }]}>Delete This Profile</Text>
         </TouchableOpacity>
 
         {/* Version */}
-        <Text style={[s.version, { color: colors.muted }]}>Driver v1.5.0</Text>
+        <Text style={[s.version, { color: colors.muted }]}>Driver v2.0.0</Text>
         <Text style={[s.brand, { color: colors.muted }]}>Powered by Agilasoft Cloud Technologies Inc.</Text>
       </ScrollView>
     </ScreenContainer>
@@ -451,9 +666,10 @@ const s = StyleSheet.create({
   card: { borderRadius: 20, padding: 20, borderWidth: 1, marginBottom: 16 },
   userRow: { flexDirection: "row", alignItems: "center", gap: 14 },
   avatar: { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center" },
-  avatarText: { color: "#fff", fontSize: 22, fontWeight: "700" },
+  avatarText: { color: "#fff", fontSize: 20, fontWeight: "700" },
   userName: { fontSize: 17, fontWeight: "700" },
   userEmail: { fontSize: 14, marginTop: 2 },
+  profileCount: { fontSize: 12, fontWeight: "600", marginTop: 4 },
   divider: { height: 0.5, marginVertical: 14 },
   infoRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 6 },
   infoText: { fontSize: 14, flex: 1 },
@@ -463,6 +679,21 @@ const s = StyleSheet.create({
   retryBtn: { flexDirection: "row", alignItems: "center", gap: 6, marginLeft: 28, marginTop: 2 },
   retryText: { fontSize: 14, fontWeight: "600" },
   sectionLabel: { fontSize: 13, fontWeight: "700", marginBottom: 8, marginLeft: 4, letterSpacing: 0.5 },
+  // Security
+  securityRow: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 20, paddingVertical: 18 },
+  securityLabel: { fontSize: 15, fontWeight: "600" },
+  securityDesc: { fontSize: 12, marginTop: 2 },
+  statusDot: { width: 10, height: 10, borderRadius: 5 },
+  pinSetupArea: { paddingHorizontal: 20, paddingBottom: 20, gap: 12, borderTopWidth: 0.5 },
+  pinSetupTitle: { fontSize: 15, fontWeight: "700", marginTop: 12 },
+  pinInput: { height: 52, borderRadius: 14, borderWidth: 1, paddingHorizontal: 20, fontSize: 20, textAlign: "center", letterSpacing: 6, fontWeight: "600" },
+  pinErrorText: { fontSize: 13, textAlign: "center" },
+  pinActions: { flexDirection: "row", gap: 12, marginTop: 4 },
+  pinCancelBtn: { flex: 1, height: 48, borderRadius: 14, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  pinCancelText: { fontSize: 15, fontWeight: "600" },
+  pinSaveBtn: { flex: 1, height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  pinSaveText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+  // Configuration
   configHeader: { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 20, paddingVertical: 18 },
   configTitle: { fontSize: 15, fontWeight: "600" },
   configSubtitle: { fontSize: 13, marginTop: 2 },
@@ -488,14 +719,19 @@ const s = StyleSheet.create({
   configBtnText: { fontSize: 14, fontWeight: "700" },
   hintBox: { flexDirection: "row", alignItems: "flex-start", gap: 10, padding: 14, borderRadius: 12, borderWidth: 0.5 },
   hintText: { flex: 1, fontSize: 12, lineHeight: 18 },
+  // Settings rows
   settingRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, paddingVertical: 16 },
   settingLabel: { fontSize: 15, flex: 1 },
   settingValue: { fontSize: 15, fontWeight: "600" },
   rowDivider: { height: 0.5, marginHorizontal: 20 },
   actionRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, paddingVertical: 16 },
   actionText: { fontSize: 15, fontWeight: "600", flex: 1 },
-  signOutBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 20, borderWidth: 1, paddingVertical: 18, marginTop: 8 },
-  signOutText: { fontSize: 16, fontWeight: "700" },
-  version: { fontSize: 13, textAlign: "center", marginTop: 24 },
+  // Profile actions
+  profileActionBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
+    borderRadius: 20, borderWidth: 1, paddingVertical: 18, marginBottom: 12,
+  },
+  profileActionText: { fontSize: 16, fontWeight: "700" },
+  version: { fontSize: 13, textAlign: "center", marginTop: 12 },
   brand: { fontSize: 12, textAlign: "center", marginTop: 4 },
 });

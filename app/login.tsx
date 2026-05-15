@@ -19,7 +19,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
 export default function LoginScreen() {
-  const { login } = useAuth();
+  const { login, profiles } = useAuth();
   const colors = useColors();
   const router = useRouter();
   const params = useLocalSearchParams<{
@@ -85,6 +85,18 @@ export default function LoginScreen() {
               <Text style={[s.appTitle, { color: colors.foreground }]}>Driver</Text>
               <Text style={[s.appSubtitle, { color: colors.muted }]}>CargoNext Logistics</Text>
             </View>
+
+            {/* Back to profiles if profiles exist */}
+            {profiles.length > 0 ? (
+              <TouchableOpacity
+                style={[s.backToProfiles, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                onPress={() => router.back()}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons name="arrow-back" size={20} color={colors.muted} />
+                <Text style={[s.backToProfilesText, { color: colors.muted }]}>Back to Profiles</Text>
+              </TouchableOpacity>
+            ) : null}
 
             {/* Scan QR Button */}
             <TouchableOpacity
@@ -211,4 +223,9 @@ const s = StyleSheet.create({
   },
   loginBtnText: { color: "#fff", fontSize: 17, fontWeight: "700" },
   hint: { fontSize: 13, textAlign: "center", marginTop: 20, lineHeight: 20 },
+  backToProfiles: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    paddingVertical: 14, borderRadius: 14, borderWidth: 1, marginBottom: 20,
+  },
+  backToProfilesText: { fontSize: 15, fontWeight: "600" },
 });

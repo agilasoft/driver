@@ -40,7 +40,7 @@ export const unstable_settings = {
 configureNotifications();
 
 function AppNavigator() {
-  const { auth, isLoading } = useAuth();
+  const { auth, isLoading, profiles, activeProfile } = useAuth();
   const router = useRouter();
 
   // Start/stop assignment polling based on auth state
@@ -81,10 +81,17 @@ function AppNavigator() {
     );
   }
 
+  // Determine which flow to show:
+  // 1. Logged in with active profile → main app
+  // 2. Has profiles but none active → profile picker
+  // 3. No profiles → login screen
+  const isLoggedIn = auth?.isLoggedIn && activeProfile;
+  const hasProfiles = profiles.length > 0;
+
   return (
     <>
       <Stack screenOptions={{ headerShown: false }}>
-        {auth?.isLoggedIn ? (
+        {isLoggedIn ? (
           <>
             <Stack.Screen name="(tabs)" />
             <Stack.Screen
@@ -112,6 +119,24 @@ function AppNavigator() {
                 presentation: "modal",
                 headerShown: true,
               }}
+            />
+            <Stack.Screen
+              name="config-scanner"
+              options={{
+                presentation: "modal",
+                headerShown: true,
+              }}
+            />
+          </>
+        ) : hasProfiles ? (
+          <>
+            <Stack.Screen
+              name="profile-picker"
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="login"
+              options={{ presentation: "fullScreenModal" }}
             />
             <Stack.Screen
               name="config-scanner"
