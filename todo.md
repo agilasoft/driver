@@ -59,3 +59,9 @@
 - [x] Update settings screen with CargoNext design
 - [x] Update run sheet detail screen with CargoNext design
 - [x] Update leg detail screen with CargoNext design
+- [x] Make profile picker the true home/landing screen (like CargoNext hosts list)
+- [x] Each profile card shows host URL, driver name, and security status
+- [x] PIN/biometric required to unlock any profile before accessing run sheets
+- [x] Orange FAB (+) button to add new profiles (goes to login/setup flow)
+- [x] Restructure navigation: profile picker → PIN/bio auth → tabs (run sheets)
+- [x] Remove old login-first flow; profiles are the entry point

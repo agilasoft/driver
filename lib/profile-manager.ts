@@ -240,10 +240,8 @@ export async function migrateOldAuth(): Promise<boolean> {
       useBiometric: false,
     });
 
-    // Set as active
-    await setActiveProfileId(profile.id);
-
-    // Remove old auth key
+    // Do NOT auto-activate — user must unlock from profile picker
+    // Just remove old auth key
     await AsyncStorage.removeItem(OLD_AUTH_KEY);
 
     return true;

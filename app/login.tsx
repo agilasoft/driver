@@ -73,6 +73,12 @@ export default function LoginScreen() {
     setIsLoading(true);
     try {
       await login(url, apiKey.trim(), apiSecret.trim());
+      // Profile created — go back to profile picker so user can unlock it
+      Alert.alert(
+        "Host Added",
+        "Profile created successfully. You can now select it from the host list.",
+        [{ text: "OK", onPress: () => router.back() }]
+      );
     } catch (error: any) {
       Alert.alert("Login Failed", error.message || "Could not connect to the server.");
     } finally {
@@ -100,15 +106,13 @@ export default function LoginScreen() {
             end={{ x: 0, y: 1 }}
             style={s.header}
           >
-            {profiles.length > 0 ? (
-              <TouchableOpacity
-                style={s.backBtn}
-                onPress={() => router.back()}
-                activeOpacity={0.7}
-              >
-                <MaterialIcons name="arrow-back" size={22} color="#fff" />
-              </TouchableOpacity>
-            ) : <View style={{ height: 40 }} />}
+            <TouchableOpacity
+              style={s.backBtn}
+              onPress={() => router.back()}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="arrow-back" size={22} color="#fff" />
+            </TouchableOpacity>
 
             <View style={s.headerLogoBox}>
               <Image

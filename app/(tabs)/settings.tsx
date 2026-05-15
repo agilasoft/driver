@@ -178,7 +178,7 @@ export default function SettingsScreen() {
   const handleSignOut = () => {
     Alert.alert("Sign Out", "Sign out of this profile? You can switch back from the profile picker.", [
       { text: "Cancel", style: "cancel" },
-      { text: "Sign Out", style: "destructive", onPress: async () => { await signOut(); } },
+      { text: "Sign Out", style: "destructive", onPress: async () => { await signOut(); router.replace("/profile-picker"); } },
     ]);
   };
 
@@ -636,7 +636,7 @@ export default function SettingsScreen() {
             onPress={() => {
               Alert.alert("Switch Profile", "Sign out and return to the profile picker?", [
                 { text: "Cancel", style: "cancel" },
-                { text: "Switch", onPress: async () => { await signOut(); } },
+                { text: "Switch", onPress: async () => { await signOut(); router.replace("/profile-picker"); } },
               ]);
             }}
             activeOpacity={0.7}

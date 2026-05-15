@@ -36,7 +36,7 @@ interface AuthContextType {
   removeProfile: (id: string) => Promise<void>;
   updateProfilePin: (id: string, pin: string | null) => Promise<void>;
   updateProfileBiometric: (id: string, enabled: boolean) => Promise<void>;
-  signOut: () => Promise<void>; // sign out of active profile (go to profile picker)
+  signOut: () => Promise<void>; // sign out of active profile (go back to profile picker)
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -48,7 +48,7 @@ const AuthContext = createContext<AuthContextType>({
   logout: async () => {},
   updateCredentials: async () => {},
   loadProfiles: async () => {},
-  switchToProfile: async () => {},
+  switchToProfile: async () => ({} as any),
   createProfile: async () => ({} as DriverProfile),
   removeProfile: async () => {},
   updateProfilePin: async () => {},
@@ -76,7 +76,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profiles, setProfiles] = useState<DriverProfile[]>([]);
   const [activeProfile, setActiveProfile] = useState<DriverProfile | null>(null);
 
-  // Initial load: migrate old auth if needed, then load profiles
+  // Initial load: migrate old auth if needed, load profiles
+  // IMPORTANT: Do NOT auto-login. Always start at profile picker.
   useEffect(() => {
     (async () => {
       try {
@@ -87,17 +88,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const allProfiles = await getAllProfiles();
         setProfiles(allProfiles);
 
-        // Check for active profile
-        const activeId = await getActiveProfileId();
-        if (activeId) {
-          const profile = allProfiles.find((p) => p.id === activeId);
-          if (profile) {
-            setActiveProfile(profile);
-            // Don't auto-login — require PIN/biometric unlock
-            // But set auth so the app knows there's a session
-            setAuth(profileToAuth(profile));
-          }
-        }
+        // Clear any active profile — always start fresh at profile picker
+        await setActiveProfileId(null);
+
+        // Also clear old frappe_auth to prevent stale sessions
+        const AsyncStorageMod = (await import("@react-native-async-storage/async-storage")).default;
+        await AsyncStorageMod.removeItem("frappe_auth");
       } catch {
         // Ignore
       } finally {
@@ -132,11 +128,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           label: `${result.fullName || result.userName} — ${new URL(result.siteUrl).hostname}`,
           lastUsedAt: new Date().toISOString(),
         }))!;
-        await setActiveProfileId(existing.id);
-        setActiveProfile(existing);
+        // Don't auto-activate — user must go back to profile picker and unlock
       } else {
         // Create new profile
-        const newProfile = await addProfile({
+        await addProfile({
           label: `${result.fullName || result.userName} — ${new URL(result.siteUrl).hostname}`,
           siteUrl: result.siteUrl,
           apiKey,
@@ -149,14 +144,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           pin: undefined,
           useBiometric: false,
         });
-        await setActiveProfileId(newProfile.id);
-        setActiveProfile(newProfile);
       }
 
       // Refresh profiles list
       const updatedProfiles = await getAllProfiles();
       setProfiles(updatedProfiles);
-      setAuth(result);
+      // Note: auth and activeProfile remain null — user must unlock from profile picker
     },
     []
   );
@@ -170,7 +163,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
-    // Sign out of active profile but keep profiles list
+    // Sign out of active profile — go back to profile picker
     await clearNotificationCache();
     await setActiveProfileId(null);
     setAuth(null);
@@ -210,7 +203,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Write the auth state for the Frappe API to use
     const authState = profileToAuth(profile);
-    // Store in AsyncStorage so frappe-api.ts can read it
     const AsyncStorageMod = (await import("@react-native-async-storage/async-storage")).default;
     await AsyncStorageMod.setItem("frappe_auth", JSON.stringify(authState));
 

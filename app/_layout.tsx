@@ -33,14 +33,14 @@ const DEFAULT_WEB_INSETS: EdgeInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 const DEFAULT_WEB_FRAME: Rect = { x: 0, y: 0, width: 0, height: 0 };
 
 export const unstable_settings = {
-  anchor: "(tabs)",
+  anchor: "profile-picker",
 };
 
 // Configure notifications at module level (before any component renders)
 configureNotifications();
 
 function AppNavigator() {
-  const { auth, isLoading, profiles, activeProfile } = useAuth();
+  const { auth, isLoading, activeProfile } = useAuth();
   const router = useRouter();
 
   // Start/stop assignment polling based on auth state
@@ -75,25 +75,28 @@ function AppNavigator() {
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#F5F7FA" }}>
-        <ActivityIndicator size="large" color="#1B3A5C" />
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#FFFFFF" }}>
+        <ActivityIndicator size="large" color="#3478C6" />
       </View>
     );
   }
 
-  // Determine which flow to show:
-  // 1. Logged in with active profile → main app
-  // 2. Has profiles but none active → profile picker
-  // 3. No profiles → login screen
-  const isLoggedIn = auth?.isLoggedIn && activeProfile;
-  const hasProfiles = profiles.length > 0;
+  // Navigation flow:
+  // 1. Profile picker is ALWAYS the home/landing screen (like CargoNext hosts list)
+  // 2. When a profile is unlocked (PIN/biometric), activeProfile is set → show tabs
+  // 3. Login screen is a modal pushed from profile picker to add new profiles
+  const isUnlocked = auth?.isLoggedIn && activeProfile;
 
   return (
     <>
       <Stack screenOptions={{ headerShown: false }}>
-        {isLoggedIn ? (
+        {isUnlocked ? (
           <>
             <Stack.Screen name="(tabs)" />
+            <Stack.Screen
+              name="profile-picker"
+              options={{ headerShown: false }}
+            />
             <Stack.Screen
               name="run-sheet/[id]"
               options={{ headerShown: true }}
@@ -127,27 +130,17 @@ function AppNavigator() {
                 headerShown: true,
               }}
             />
+            <Stack.Screen
+              name="login"
+              options={{ presentation: "fullScreenModal" }}
+            />
           </>
-        ) : hasProfiles ? (
+        ) : (
           <>
             <Stack.Screen
               name="profile-picker"
               options={{ headerShown: false }}
             />
-            <Stack.Screen
-              name="login"
-              options={{ presentation: "fullScreenModal" }}
-            />
-            <Stack.Screen
-              name="config-scanner"
-              options={{
-                presentation: "modal",
-                headerShown: true,
-              }}
-            />
-          </>
-        ) : (
-          <>
             <Stack.Screen
               name="login"
               options={{ presentation: "fullScreenModal" }}
