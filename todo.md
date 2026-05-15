@@ -65,3 +65,4 @@
 - [x] Orange FAB (+) button to add new profiles (goes to login/setup flow)
 - [x] Restructure navigation: profile picker → PIN/bio auth → tabs (run sheets)
 - [x] Remove old login-first flow; profiles are the entry point
+- [x] Fix: Web preview shows Run Sheets tab instead of profile picker on startup

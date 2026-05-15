@@ -32,10 +32,6 @@ import * as Notifications from "expo-notifications";
 const DEFAULT_WEB_INSETS: EdgeInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 const DEFAULT_WEB_FRAME: Rect = { x: 0, y: 0, width: 0, height: 0 };
 
-export const unstable_settings = {
-  anchor: "profile-picker",
-};
-
 // Configure notifications at module level (before any component renders)
 configureNotifications();
 
@@ -90,71 +86,22 @@ function AppNavigator() {
   return (
     <>
       <Stack screenOptions={{ headerShown: false }}>
+        {/* Root index always redirects to profile-picker */}
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="profile-picker" options={{ headerShown: false }} />
+        <Stack.Screen name="login" options={{ presentation: "fullScreenModal", headerShown: false }} />
+        <Stack.Screen name="config-scanner" options={{ presentation: "modal", headerShown: true }} />
+        <Stack.Screen name="oauth/callback" options={{ headerShown: false }} />
         {isUnlocked ? (
           <>
             <Stack.Screen name="(tabs)" />
-            <Stack.Screen
-              name="profile-picker"
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="run-sheet/[id]"
-              options={{ headerShown: true }}
-            />
-            <Stack.Screen
-              name="leg/[legId]"
-              options={{ headerShown: true }}
-            />
-            <Stack.Screen
-              name="signature-modal"
-              options={{
-                presentation: "modal",
-                headerShown: true,
-              }}
-            />
-            <Stack.Screen
-              name="route-map"
-              options={{ headerShown: true }}
-            />
-            <Stack.Screen
-              name="barcode-scanner"
-              options={{
-                presentation: "modal",
-                headerShown: true,
-              }}
-            />
-            <Stack.Screen
-              name="config-scanner"
-              options={{
-                presentation: "modal",
-                headerShown: true,
-              }}
-            />
-            <Stack.Screen
-              name="login"
-              options={{ presentation: "fullScreenModal" }}
-            />
+            <Stack.Screen name="run-sheet/[id]" options={{ headerShown: true }} />
+            <Stack.Screen name="leg/[legId]" options={{ headerShown: true }} />
+            <Stack.Screen name="signature-modal" options={{ presentation: "modal", headerShown: true }} />
+            <Stack.Screen name="route-map" options={{ headerShown: true }} />
+            <Stack.Screen name="barcode-scanner" options={{ presentation: "modal", headerShown: true }} />
           </>
-        ) : (
-          <>
-            <Stack.Screen
-              name="profile-picker"
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="login"
-              options={{ presentation: "fullScreenModal" }}
-            />
-            <Stack.Screen
-              name="config-scanner"
-              options={{
-                presentation: "modal",
-                headerShown: true,
-              }}
-            />
-          </>
-        )}
-        <Stack.Screen name="oauth/callback" />
+        ) : null}
       </Stack>
       <StatusBar style="auto" />
     </>
