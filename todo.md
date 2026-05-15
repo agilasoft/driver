@@ -49,3 +49,5 @@
 - [x] Delivery notes/comments field on each transport leg
 - [x] Dark mode toggle in Settings (manual override)
 - [x] Leg completion progress bar on run sheet cards
+- [x] Redesign login screen to match CargoNext app style (clean, professional, step-based)
+- [x] Redesign profile picker to match CargoNext visual style
