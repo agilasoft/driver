@@ -66,3 +66,4 @@
 - [x] Restructure navigation: profile picker → PIN/bio auth → tabs (run sheets)
 - [x] Remove old login-first flow; profiles are the entry point
 - [x] Fix: Web preview shows Run Sheets tab instead of profile picker on startup
+- [x] Update app icon with CargoNext blue (#3478C6) background
