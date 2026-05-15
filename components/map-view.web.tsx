@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, StyleSheet, Linking, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, Linking, TouchableOpacity, ScrollView } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useColors } from "@/hooks/use-colors";
 
@@ -25,26 +25,31 @@ interface NativeMapProps {
 }
 
 /**
- * Web fallback for NativeMap — renders an OpenStreetMap iframe embed
- * with markers for all leg locations, plus a clickable location list.
+ * Web fallback for NativeMap — renders a location list with links to Google Maps.
+ * react-native-maps is not supported on web, so we show a clean list instead.
  */
 export function NativeMap({ legs, initialRegion, allCoords }: NativeMapProps) {
   const colors = useColors();
-
-  // Build an OpenStreetMap embed URL centered on the route
-  const zoom = allCoords.length > 1 ? 10 : 13;
-  const mapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${
-    initialRegion.longitude - initialRegion.longitudeDelta / 2
-  },${initialRegion.latitude - initialRegion.latitudeDelta / 2},${
-    initialRegion.longitude + initialRegion.longitudeDelta / 2
-  },${initialRegion.latitude + initialRegion.latitudeDelta / 2}&layer=mapnik&marker=${
-    initialRegion.latitude
-  },${initialRegion.longitude}`;
 
   const openInGoogleMaps = (lat: number, lng: number) => {
     Linking.openURL(
       `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
     );
+  };
+
+  const openFullRoute = () => {
+    if (allCoords.length === 0) return;
+    // Build a Google Maps directions URL with waypoints
+    const origin = `${allCoords[0].latitude},${allCoords[0].longitude}`;
+    const dest = `${allCoords[allCoords.length - 1].latitude},${allCoords[allCoords.length - 1].longitude}`;
+    const waypoints = allCoords
+      .slice(1, -1)
+      .map((c) => `${c.latitude},${c.longitude}`)
+      .join("|");
+    const url = waypoints
+      ? `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}&waypoints=${waypoints}`
+      : `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}`;
+    Linking.openURL(url);
   };
 
   if (allCoords.length === 0) {
@@ -59,19 +64,24 @@ export function NativeMap({ legs, initialRegion, allCoords }: NativeMapProps) {
   }
 
   return (
-    <View style={styles.container}>
-      {/* Embedded OpenStreetMap */}
-      <View style={styles.mapFrame}>
-        <iframe
-          src={mapUrl}
-          style={{
-            width: "100%",
-            height: "100%",
-            border: "none",
-            borderRadius: 12,
-          }}
-          title="Route Map"
-        />
+    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+      {/* Map placeholder with "Open in Google Maps" */}
+      <View style={[styles.mapPlaceholder, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <MaterialIcons name="map" size={48} color={colors.primary} />
+        <Text style={[styles.mapPlaceholderTitle, { color: colors.foreground }]}>
+          Map View
+        </Text>
+        <Text style={[styles.mapPlaceholderSubtitle, { color: colors.muted }]}>
+          Native maps are available on iOS and Android devices.
+        </Text>
+        <TouchableOpacity
+          onPress={openFullRoute}
+          style={[styles.openMapsBtn, { backgroundColor: colors.primary }]}
+          activeOpacity={0.8}
+        >
+          <MaterialIcons name="open-in-new" size={18} color="#fff" />
+          <Text style={styles.openMapsBtnText}>Open Route in Google Maps</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Location list */}
@@ -134,7 +144,7 @@ export function NativeMap({ legs, initialRegion, allCoords }: NativeMapProps) {
           </View>
         ))}
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -142,16 +152,45 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  mapFrame: {
-    height: 350,
+  contentContainer: {
+    paddingBottom: 32,
+  },
+  mapPlaceholder: {
     marginHorizontal: 16,
+    marginTop: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 32,
+    alignItems: "center",
+    gap: 8,
+  },
+  mapPlaceholderTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    marginTop: 8,
+  },
+  mapPlaceholderSubtitle: {
+    fontSize: 13,
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  openMapsBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
     marginTop: 12,
-    borderRadius: 12,
-    overflow: "hidden",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  openMapsBtnText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "700",
   },
   locationList: {
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 20,
   },
   legendHeader: {
     flexDirection: "row",

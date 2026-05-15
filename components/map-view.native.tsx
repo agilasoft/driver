@@ -1,7 +1,20 @@
 import React, { useRef, useEffect } from "react";
-import { View, Text, StyleSheet, Dimensions } from "react-native";
-import MapView, { Marker, Polyline } from "react-native-maps";
+import { View, Text, StyleSheet, Dimensions, Platform } from "react-native";
 import { useColors } from "@/hooks/use-colors";
+
+// Conditionally import react-native-maps to prevent web crashes
+let MapView: any = null;
+let Marker: any = null;
+let Polyline: any = null;
+
+try {
+  const maps = require("react-native-maps");
+  MapView = maps.default;
+  Marker = maps.Marker;
+  Polyline = maps.Polyline;
+} catch (e) {
+  // react-native-maps not available (e.g. on web)
+}
 
 interface LegPoint {
   name: string;
@@ -26,7 +39,7 @@ interface NativeMapProps {
 
 export function NativeMap({ legs, initialRegion, allCoords }: NativeMapProps) {
   const colors = useColors();
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<any>(null);
 
   useEffect(() => {
     if (mapRef.current && allCoords.length > 1) {
@@ -39,14 +52,25 @@ export function NativeMap({ legs, initialRegion, allCoords }: NativeMapProps) {
     }
   }, [allCoords]);
 
+  // If react-native-maps is not available, show a fallback
+  if (!MapView) {
+    return (
+      <View style={[styles.fallbackContainer, { backgroundColor: colors.surface }]}>
+        <Text style={[styles.fallbackText, { color: colors.muted }]}>
+          Map is not available on this platform.
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <MapView
         ref={mapRef}
         style={styles.map}
         initialRegion={initialRegion}
-        showsUserLocation
-        showsMyLocationButton
+        showsUserLocation={Platform.OS !== "web"}
+        showsMyLocationButton={Platform.OS !== "web"}
       >
         {legs.map((leg, i) => (
           <React.Fragment key={leg.name}>
@@ -123,6 +147,16 @@ const styles = StyleSheet.create({
   map: {
     width: Dimensions.get("window").width,
     height: Dimensions.get("window").height,
+  },
+  fallbackContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 32,
+  },
+  fallbackText: {
+    fontSize: 14,
+    textAlign: "center",
   },
   legend: {
     position: "absolute",

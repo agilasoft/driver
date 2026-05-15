@@ -71,3 +71,4 @@
 - [x] Swipe-to-delete profiles on profile picker screen
 - [x] Session timeout: auto-lock active profile after configurable idle period
 - [x] Regenerate app icon with rounded corners and more padding around steering wheel
+- [x] Fix: Opening maps crashes the app
