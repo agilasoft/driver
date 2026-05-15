@@ -27,6 +27,7 @@ import { updateRunSheetStatus } from "@/lib/frappe-api";
 import { generateRunSheetPdf } from "@/lib/pdf-generator";
 import { useAuth } from "@/lib/auth-context";
 import { resolveAllLegCoordinates } from "@/lib/geocoding";
+import { useGeofence, buildGeofenceTargets } from "@/lib/geofence";
 
 const BLUE = "#3478C6";
 const BLUE_LIGHT = "#5B9BD5";
@@ -49,6 +50,7 @@ export default function RunSheetDetailScreen() {
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [isResolvingMap, setIsResolvingMap] = useState(false);
+  const { isEnabled: geofenceEnabled, setTargets: setGeofenceTargets } = useGeofence();
 
   const loadData = useCallback(
     async (showRefresh = false) => {
@@ -80,6 +82,27 @@ export default function RunSheetDetailScreen() {
   );
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Set geofence targets when bundle loads and geofence is enabled
+  useEffect(() => {
+    if (!geofenceEnabled || !bundle || !auth) return;
+    const resolveTargets = async () => {
+      try {
+        const baseUrl = auth.siteUrl.replace(/\/+$/, "");
+        const headers = {
+          Authorization: `token ${auth.apiKey}:${auth.apiSecret}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        };
+        const resolved = await resolveAllLegCoordinates({ legs: bundle.legs, baseUrl, headers });
+        const targets = buildGeofenceTargets(resolved);
+        setGeofenceTargets(targets);
+      } catch {
+        // Silently fail — geofence is optional
+      }
+    };
+    resolveTargets();
+  }, [geofenceEnabled, bundle, auth, setGeofenceTargets]);
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "—";

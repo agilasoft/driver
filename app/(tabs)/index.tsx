@@ -25,6 +25,7 @@ import {
 } from "@/lib/offline-store";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLiveLocation } from "@/lib/live-location";
+import { useShiftLog, formatDuration } from "@/lib/shift-log";
 
 const BLUE = "#3478C6";
 const BLUE_LIGHT = "#5B9BD5";
@@ -55,8 +56,9 @@ function getStartOfWeek(): Date {
 export default function RunSheetsScreen() {
   const router = useRouter();
   const { isOnline } = useSync();
-  const { auth } = useAuth();
+  const { auth, activeProfile } = useAuth();
   const { isEnabled: liveLocEnabled, isTracking, pendingQueueCount, isSyncingQueue } = useLiveLocation();
+  const { isClocked, elapsedMs, totalTodayMs, clockIn, clockOut } = useShiftLog();
   const [sheets, setSheets] = useState<RunSheet[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -342,6 +344,46 @@ export default function RunSheetsScreen() {
       </View>
 
       <ConnectivityBanner />
+
+      {/* Shift Clock Banner */}
+      <TouchableOpacity
+        style={[
+          styles.shiftBanner,
+          { backgroundColor: isClocked ? "#E8F5E9" : "#FFF3E0" },
+        ]}
+        onPress={async () => {
+          if (isClocked) {
+            await clockOut();
+          } else if (activeProfile) {
+            await clockIn(activeProfile.id);
+          }
+        }}
+        activeOpacity={0.7}
+      >
+        <MaterialIcons
+          name={isClocked ? "timer" : "timer-off"}
+          size={18}
+          color={isClocked ? "#34C759" : ORANGE}
+        />
+        <View style={styles.shiftBannerContent}>
+          <Text style={styles.shiftBannerTitle}>
+            {isClocked ? "On Shift" : "Off Shift"}
+          </Text>
+          <Text style={styles.shiftBannerSub}>
+            {isClocked
+              ? `Elapsed: ${formatDuration(elapsedMs)}`
+              : "Tap to clock in"}
+          </Text>
+        </View>
+        <View style={[
+          styles.shiftClockBtn,
+          { backgroundColor: isClocked ? "#FF3B30" : "#34C759" },
+        ]}>
+          <Text style={styles.shiftClockBtnText}>
+            {isClocked ? "Clock Out" : "Clock In"}
+          </Text>
+        </View>
+      </TouchableOpacity>
 
       {/* Live Location Status Banner */}
       {liveLocEnabled && (
@@ -661,5 +703,39 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#8E8E93",
     marginTop: 12,
+  },
+
+  // Shift Banner
+  shiftBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#E5E5EA",
+    gap: 10,
+  },
+  shiftBannerContent: {
+    flex: 1,
+  },
+  shiftBannerTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#1A1A1A",
+  },
+  shiftBannerSub: {
+    fontSize: 12,
+    color: "#8E8E93",
+    marginTop: 1,
+  },
+  shiftClockBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 16,
+  },
+  shiftClockBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
 });

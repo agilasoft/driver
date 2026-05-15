@@ -25,6 +25,8 @@ import { checkBiometricAvailability } from "@/lib/profile-manager";
 import { useThemeContext, type ThemePreference } from "@/lib/theme-provider";
 import { useSessionTimeout, TIMEOUT_OPTIONS } from "@/lib/session-timeout";
 import { useLiveLocation, INTERVAL_OPTIONS } from "@/lib/live-location";
+import { useGeofence, RADIUS_OPTIONS } from "@/lib/geofence";
+import { useShiftLog, formatDuration, formatDurationShort } from "@/lib/shift-log";
 import { LinearGradient } from "expo-linear-gradient";
 
 const BLUE = "#3478C6";
@@ -49,6 +51,8 @@ export default function SettingsScreen() {
   const { themePreference, setThemePreference, colorScheme } = useThemeContext();
   const { timeoutMinutes, setTimeoutMinutes } = useSessionTimeout();
   const { isEnabled: liveLocEnabled, isTracking, lastUpdate, intervalMs, setEnabled: setLiveLocEnabled, setIntervalMs } = useLiveLocation();
+  const { isEnabled: geoEnabled, isMonitoring: geoMonitoring, radiusM, recentAlerts, setEnabled: setGeoEnabled, setRadiusM } = useGeofence();
+  const { isClocked, elapsedMs, todayShifts, totalTodayMs, clockIn, clockOut, syncShifts } = useShiftLog();
   const params = useLocalSearchParams<{
     scannedSiteUrl?: string;
     scannedApiKey?: string;
@@ -724,6 +728,157 @@ export default function SettingsScreen() {
                     <Text style={[st.settingLabel, { fontSize: 13 }]}>Last Update</Text>
                     <Text style={[st.settingValue, { fontSize: 12, color: GRAY }]}>
                       {new Date(lastUpdate.timestamp).toLocaleTimeString()}
+                    </Text>
+                  </View>
+                </>
+              )}
+            </>
+          )}
+        </View>
+
+        {/* Shift Log */}
+        <Text style={st.sectionLabel}>SHIFT LOG</Text>
+        <View style={[st.card, { padding: 0, overflow: "hidden" }]}>
+          <View style={st.securityRow}>
+            <MaterialIcons name="timer" size={22} color={isClocked ? GREEN : GRAY} />
+            <View style={{ flex: 1 }}>
+              <Text style={st.securityLabel}>Current Shift</Text>
+              <Text style={st.securityDesc}>
+                {isClocked
+                  ? `Clocked in \u2014 ${formatDuration(elapsedMs)}`
+                  : "Not clocked in"}
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={async () => {
+                if (isClocked) {
+                  await clockOut();
+                } else if (activeProfile) {
+                  await clockIn(activeProfile.id);
+                }
+              }}
+              activeOpacity={0.7}
+              style={{
+                paddingHorizontal: 14,
+                paddingVertical: 7,
+                borderRadius: 16,
+                backgroundColor: isClocked ? RED : GREEN,
+              }}
+            >
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "#fff" }}>
+                {isClocked ? "Clock Out" : "Clock In"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={st.rowDivider} />
+          <View style={[st.settingRow, { paddingVertical: 12 }]}>
+            <MaterialIcons name="today" size={18} color={BLUE} />
+            <Text style={[st.settingLabel, { fontSize: 13 }]}>Today's Total</Text>
+            <Text style={[st.settingValue, { fontSize: 13, fontWeight: "700", color: BLUE }]}>
+              {formatDurationShort(totalTodayMs)}
+            </Text>
+          </View>
+
+          {todayShifts.length > 0 && (
+            <>
+              <View style={st.rowDivider} />
+              <View style={[st.settingRow, { paddingVertical: 12 }]}>
+                <MaterialIcons name="history" size={18} color={GRAY} />
+                <Text style={[st.settingLabel, { fontSize: 13 }]}>Today's Shifts</Text>
+                <Text style={[st.settingValue, { fontSize: 12, color: GRAY }]}>
+                  {todayShifts.length} shift{todayShifts.length !== 1 ? "s" : ""}
+                </Text>
+              </View>
+            </>
+          )}
+
+          {auth && todayShifts.some((s) => !s.synced) && (
+            <>
+              <View style={st.rowDivider} />
+              <TouchableOpacity
+                style={st.actionRow}
+                onPress={async () => {
+                  const result = await syncShifts(auth);
+                  Alert.alert(
+                    "Shift Sync",
+                    `Synced ${result.synced} shift${result.synced !== 1 ? "s" : ""}${result.failed > 0 ? `, ${result.failed} failed` : ""}`
+                  );
+                }}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons name="cloud-upload" size={22} color={BLUE} />
+                <Text style={[st.actionText, { color: BLUE }]}>Sync Shift Records</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+
+        {/* Geofence Alerts */}
+        <Text style={st.sectionLabel}>GEOFENCE ALERTS</Text>
+        <View style={[st.card, { padding: 0, overflow: "hidden" }]}>
+          <TouchableOpacity
+            style={st.securityRow}
+            onPress={() => setGeoEnabled(!geoEnabled)}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons name="location-searching" size={22} color={geoEnabled ? GREEN : GRAY} />
+            <View style={{ flex: 1 }}>
+              <Text style={st.securityLabel}>Auto-Detect Arrival</Text>
+              <Text style={st.securityDesc}>
+                {geoEnabled
+                  ? geoMonitoring
+                    ? "Monitoring delivery locations"
+                    : "Enabled \u2014 open a run sheet to start monitoring"
+                  : "Disabled \u2014 no automatic arrival detection"}
+              </Text>
+            </View>
+            <View style={[st.statusDot, { backgroundColor: geoMonitoring ? GREEN : geoEnabled ? WARN : BORDER }]} />
+          </TouchableOpacity>
+
+          {geoEnabled && (
+            <>
+              <View style={st.rowDivider} />
+              <View style={st.timeoutHeader}>
+                <MaterialIcons name="adjust" size={22} color={BLUE} />
+                <View style={{ flex: 1 }}>
+                  <Text style={st.timeoutTitle}>Detection Radius</Text>
+                  <Text style={st.timeoutDesc}>
+                    Alert when within this distance of a delivery location
+                  </Text>
+                </View>
+              </View>
+              {RADIUS_OPTIONS.map((opt) => (
+                <React.Fragment key={opt.value}>
+                  <View style={st.rowDivider} />
+                  <TouchableOpacity
+                    style={st.timeoutRow}
+                    onPress={() => setRadiusM(opt.value)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[
+                      st.timeoutLabel,
+                      { color: radiusM === opt.value ? BLUE : FG },
+                    ]}>
+                      {opt.label}
+                    </Text>
+                    {radiusM === opt.value ? (
+                      <MaterialIcons name="check-circle" size={22} color={BLUE} />
+                    ) : (
+                      <MaterialIcons name="radio-button-unchecked" size={22} color={BORDER} />
+                    )}
+                  </TouchableOpacity>
+                </React.Fragment>
+              ))}
+
+              {recentAlerts.length > 0 && (
+                <>
+                  <View style={st.rowDivider} />
+                  <View style={[st.settingRow, { paddingVertical: 12 }]}>
+                    <MaterialIcons name="history" size={18} color={ORANGE} />
+                    <Text style={[st.settingLabel, { fontSize: 13 }]}>Recent Alerts</Text>
+                    <Text style={[st.settingValue, { fontSize: 12, color: GRAY }]}>
+                      {recentAlerts.length} alert{recentAlerts.length !== 1 ? "s" : ""}
                     </Text>
                   </View>
                 </>
