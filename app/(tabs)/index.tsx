@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,454 +6,330 @@ import {
   RefreshControl,
   TouchableOpacity,
   ActivityIndicator,
-  TextInput,
+  Alert,
   StyleSheet,
   Platform,
+  Linking,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { ScreenContainer } from "@/components/screen-container";
 import { ConnectivityBanner } from "@/components/connectivity-banner";
-import { StatusBadge } from "@/components/status-badge";
 import { useSync } from "@/lib/sync-context";
 import { useAuth } from "@/lib/auth-context";
-import type { RunSheet, TransportLeg } from "@/lib/types";
-import {
-  getCachedRunSheets,
-  refreshRunSheets,
-  getCachedBundle,
-} from "@/lib/offline-store";
-import { LinearGradient } from "expo-linear-gradient";
+import { useCurrentJob } from "@/lib/current-job";
 import { useLiveLocation } from "@/lib/live-location";
 import { useShiftLog, formatDuration } from "@/lib/shift-log";
+import type { RunSheetBundle, TransportLeg } from "@/lib/types";
+import {
+  getCachedBundle,
+  refreshBundle,
+  addPendingChange,
+  applyLocalChange,
+} from "@/lib/offline-store";
+import { LinearGradient } from "expo-linear-gradient";
 
 const BLUE = "#3478C6";
 const BLUE_LIGHT = "#5B9BD5";
 const ORANGE = "#F27A2E";
+const GREEN = "#34C759";
+const RED = "#FF3B30";
+const GRAY = "#8E8E93";
+const BORDER = "#E5E5EA";
+const FG = "#1A1A1A";
 
-type DateFilter = "today" | "week" | "all";
-
-interface LegProgress {
-  total: number;
-  completed: number;
-}
-
-function getStartOfDay(): Date {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function getStartOfWeek(): Date {
-  const d = new Date();
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  d.setDate(diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-export default function RunSheetsScreen() {
+export default function CurrentJobScreen() {
   const router = useRouter();
   const { isOnline } = useSync();
   const { auth, activeProfile } = useAuth();
-  const { isEnabled: liveLocEnabled, isTracking, pendingQueueCount, isSyncingQueue } = useLiveLocation();
-  const { isClocked, elapsedMs, totalTodayMs, clockIn, clockOut } = useShiftLog();
-  const [sheets, setSheets] = useState<RunSheet[]>([]);
+  const { currentJobId } = useCurrentJob();
+  const { isEnabled: liveLocEnabled, isTracking } = useLiveLocation();
+  const { isClocked, elapsedMs, clockIn, clockOut } = useShiftLog();
+
+  const [bundle, setBundle] = useState<RunSheetBundle | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [dateFilter, setDateFilter] = useState<DateFilter>("all");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [legProgressMap, setLegProgressMap] = useState<Record<string, LegProgress>>({});
 
   const loadData = useCallback(
     async (showRefresh = false) => {
+      if (!currentJobId) {
+        setBundle(null);
+        setIsLoading(false);
+        return;
+      }
       if (showRefresh) setIsRefreshing(true);
       else setIsLoading(true);
-
       try {
-        let data: RunSheet[];
         if (isOnline) {
-          data = await refreshRunSheets();
-        } else {
-          data = await getCachedRunSheets();
-        }
-        setSheets(data);
-
-        const progressMap: Record<string, LegProgress> = {};
-        for (const sheet of data) {
           try {
-            const bundle = await getCachedBundle(sheet.name);
-            if (bundle && bundle.legs) {
-              const total = bundle.legs.length;
-              const completed = bundle.legs.filter(
-                (l: TransportLeg) => l.status === "Completed" || l.status === "Billed"
-              ).length;
-              progressMap[sheet.name] = { total, completed };
-            }
+            const data = await refreshBundle(currentJobId);
+            setBundle(data);
           } catch {
-            // Skip
+            const cached = await getCachedBundle(currentJobId);
+            setBundle(cached);
           }
+        } else {
+          const cached = await getCachedBundle(currentJobId);
+          setBundle(cached);
         }
-        setLegProgressMap(progressMap);
       } catch {
-        const cached = await getCachedRunSheets();
-        setSheets(cached);
+        const cached = await getCachedBundle(currentJobId);
+        setBundle(cached);
       } finally {
         setIsLoading(false);
         setIsRefreshing(false);
       }
     },
-    [isOnline]
+    [currentJobId, isOnline]
   );
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
-  const filteredSheets = useMemo(() => {
-    let result = sheets;
+  // Reload when tab comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      if (currentJobId) loadData();
+    }, [currentJobId, loadData])
+  );
 
-    if (dateFilter !== "all") {
-      const cutoff = dateFilter === "today" ? getStartOfDay() : getStartOfWeek();
-      result = result.filter((s) => {
-        if (!s.run_date) return false;
-        try {
-          return new Date(s.run_date) >= cutoff;
-        } catch {
-          return false;
-        }
-      });
-    }
+  // Compute progress
+  const completedLegs = bundle?.legs.filter(
+    (l) => (l.pick_signature || l.start_date) && (l.drop_signature || l.end_date)
+  ).length || 0;
+  const totalLegs = bundle?.legs.length || 0;
+  const progressPercent = totalLegs > 0 ? Math.round((completedLegs / totalLegs) * 100) : 0;
 
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      result = result.filter((s) => {
-        const searchable = [s.name, s.route_name, s.vehicle, s.run_type, s.status]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-        return searchable.includes(q);
-      });
-    }
-
-    return result;
-  }, [sheets, dateFilter, searchQuery]);
-
-  const formatDate = (dateStr: string) => {
-    if (!dateStr) return "—";
-    try {
-      const d = new Date(dateStr);
-      return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-    } catch {
-      return dateStr;
-    }
+  const getNextLeg = (): TransportLeg | null => {
+    if (!bundle) return null;
+    // Find first leg that's not fully completed
+    return bundle.legs.find((l) => {
+      const hasPickData = !!l.pick_signature || !!l.start_date;
+      const hasDropData = !!l.drop_signature || !!l.end_date;
+      return !(hasPickData && hasDropData);
+    }) || null;
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "Dispatched": return BLUE;
-      case "In-Progress": return ORANGE;
-      case "Completed": return "#34C759";
-      default: return "#8E8E93";
-    }
-  };
+  const nextLeg = getNextLeg();
 
-  const renderItem = ({ item }: { item: RunSheet }) => {
-    const isActive = item.status === "Dispatched" || item.status === "In-Progress";
-    const statusColor = getStatusColor(item.status);
-    const progress = legProgressMap[item.name];
+  const renderLegItem = ({ item, index }: { item: TransportLeg; index: number }) => {
+    const hasPickData = !!item.pick_signature || !!item.start_date;
+    const hasDropData = !!item.drop_signature || !!item.end_date;
+    const isComplete = hasPickData && hasDropData;
+    const isPartial = hasPickData || hasDropData;
+    const isNext = nextLeg?.name === item.name;
 
     return (
       <TouchableOpacity
-        onPress={() =>
-          router.push({ pathname: "/run-sheet/[id]", params: { id: item.name } })
-        }
+        onPress={() => router.push({ pathname: "/leg/[legId]", params: { legId: item.name, runSheetId: currentJobId || "" } })}
         activeOpacity={0.7}
         style={[
-          styles.card,
-          {
-            borderLeftColor: statusColor,
-            borderLeftWidth: 4,
-          },
+          st.legCard,
+          isNext && st.legCardNext,
+          isComplete && st.legCardComplete,
         ]}
       >
-        <View style={styles.cardTopRow}>
-          <View style={styles.cardIdContainer}>
-            {isActive && <View style={[styles.activePulse, { backgroundColor: statusColor }]} />}
-            <Text style={styles.cardId} numberOfLines={1}>{item.name}</Text>
+        <View style={st.legRow}>
+          {/* Status indicator */}
+          <View style={[
+            st.legStatusCircle,
+            { backgroundColor: isComplete ? GREEN : isPartial ? ORANGE : (isNext ? BLUE : BORDER) },
+          ]}>
+            {isComplete ? (
+              <MaterialIcons name="check" size={16} color="#fff" />
+            ) : (
+              <Text style={st.legNumber}>{index + 1}</Text>
+            )}
           </View>
-          <StatusBadge status={item.status} />
-        </View>
 
-        {item.route_name ? (
-          <Text style={styles.routeName} numberOfLines={1}>{item.route_name}</Text>
-        ) : null}
+          {/* Leg info */}
+          <View style={st.legInfo}>
+            <Text style={[st.legTitle, isComplete && st.legTitleComplete]} numberOfLines={1}>
+              {item.facility_from || "Pick-up"} → {item.facility_to || "Drop-off"}
+            </Text>
+            <View style={st.legMeta}>
+              {isComplete ? (
+                <Text style={st.legMetaComplete}>Completed</Text>
+              ) : isPartial ? (
+                <Text style={st.legMetaPartial}>In progress</Text>
+              ) : isNext ? (
+                <Text style={st.legMetaNext}>Next stop</Text>
+              ) : (
+                <Text style={st.legMetaPending}>Pending</Text>
+              )}
+            </View>
+          </View>
 
-        {progress && progress.total > 0 ? (
-          <View style={styles.progressContainer}>
-            <View style={styles.progressTrack}>
-              <View
-                style={[
-                  styles.progressFill,
-                  {
-                    backgroundColor: progress.completed === progress.total ? "#34C759" : BLUE,
-                    width: `${Math.round((progress.completed / progress.total) * 100)}%`,
-                  },
-                ]}
+          {/* Action arrow */}
+          {!isComplete && (
+            <View style={[st.legAction, isNext && st.legActionNext]}>
+              <MaterialIcons
+                name={isNext ? "arrow-forward" : "chevron-right"}
+                size={isNext ? 20 : 22}
+                color={isNext ? "#fff" : "#C7C7CC"}
               />
             </View>
-            <Text style={styles.progressText}>
-              {progress.completed}/{progress.total} legs
-            </Text>
-          </View>
-        ) : null}
-
-        <View style={styles.cardInfoRow}>
-          <View style={styles.infoItem}>
-            <MaterialIcons name="event" size={15} color="#8E8E93" />
-            <Text style={styles.infoText}>{formatDate(item.run_date)}</Text>
-          </View>
-          {item.vehicle ? (
-            <View style={styles.infoItem}>
-              <MaterialIcons name="local-shipping" size={15} color="#8E8E93" />
-              <Text style={styles.infoText}>{item.vehicle}</Text>
-            </View>
-          ) : null}
-          {item.run_type ? (
-            <View style={styles.infoItem}>
-              <MaterialIcons name="label" size={15} color="#8E8E93" />
-              <Text style={styles.infoText}>{item.run_type}</Text>
-            </View>
-          ) : null}
-          <View style={styles.cardArrow}>
-            <MaterialIcons name="chevron-right" size={22} color="#C7C7CC" />
-          </View>
+          )}
         </View>
       </TouchableOpacity>
     );
   };
 
-  const renderEmpty = () => {
-    if (isLoading) return null;
+  // No current job selected
+  if (!currentJobId) {
     return (
-      <View style={styles.emptyContainer}>
-        <View style={styles.emptyIconCircle}>
-          <MaterialIcons name="description" size={48} color="#C7C7CC" />
+      <ScreenContainer containerClassName="bg-white">
+        <LinearGradient colors={[BLUE, BLUE_LIGHT]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={st.header}>
+          <Text style={st.headerTitle}>Current Job</Text>
+          {auth?.driverName ? <Text style={st.headerSubtitle}>{auth.driverName}</Text> : null}
+        </LinearGradient>
+        <View style={st.emptyContainer}>
+          <View style={st.emptyIconCircle}>
+            <MaterialIcons name="local-shipping" size={48} color="#C7C7CC" />
+          </View>
+          <Text style={st.emptyTitle}>No Active Job</Text>
+          <Text style={st.emptySubtitle}>
+            Go to the Run Sheets tab to select a job
+          </Text>
+          <TouchableOpacity
+            style={st.emptyBtn}
+            onPress={() => router.navigate("/(tabs)/run-sheets")}
+            activeOpacity={0.8}
+          >
+            <MaterialIcons name="list-alt" size={20} color="#fff" />
+            <Text style={st.emptyBtnText}>View Run Sheets</Text>
+          </TouchableOpacity>
         </View>
-        <Text style={styles.emptyTitle}>No Run Sheets Found</Text>
-        <Text style={styles.emptySubtitle}>
-          {searchQuery
-            ? `No results for "${searchQuery}"`
-            : dateFilter !== "all"
-            ? "Try selecting a different date range"
-            : auth?.driverId
-            ? "No run sheets assigned to you yet"
-            : "Pull down to refresh"}
-        </Text>
-      </View>
+      </ScreenContainer>
     );
-  };
+  }
 
-  const filterOptions: { key: DateFilter; label: string }[] = [
-    { key: "today", label: "Today" },
-    { key: "week", label: "This Week" },
-    { key: "all", label: "All" },
-  ];
+  if (isLoading) {
+    return (
+      <ScreenContainer containerClassName="bg-white">
+        <LinearGradient colors={[BLUE, BLUE_LIGHT]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={st.header}>
+          <Text style={st.headerTitle}>Current Job</Text>
+        </LinearGradient>
+        <View style={st.loadingContainer}>
+          <ActivityIndicator size="large" color={BLUE} />
+          <Text style={st.loadingText}>Loading job...</Text>
+        </View>
+      </ScreenContainer>
+    );
+  }
 
   return (
     <ScreenContainer containerClassName="bg-white">
-      {/* Blue gradient header */}
-      <LinearGradient
-        colors={[BLUE, BLUE_LIGHT]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        style={styles.gradientHeader}
-      >
-        <View style={styles.headerTop}>
-          <View>
-            <Text style={styles.headerTitle}>Run Sheets</Text>
-            {auth?.driverName ? (
-              <Text style={styles.headerSubtitle}>{auth.driverName}</Text>
-            ) : auth?.fullName ? (
-              <Text style={styles.headerSubtitle}>{auth.fullName}</Text>
+      {/* Header */}
+      <LinearGradient colors={[BLUE, BLUE_LIGHT]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={st.header}>
+        <View style={st.headerRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={st.headerTitle}>Current Job</Text>
+            {bundle?.doc.route_name ? (
+              <Text style={st.headerSubtitle} numberOfLines={1}>{bundle.doc.route_name}</Text>
+            ) : bundle?.doc.name ? (
+              <Text style={st.headerSubtitle} numberOfLines={1}>{bundle.doc.name}</Text>
             ) : null}
           </View>
-          {!isOnline && (
-            <View style={styles.offlineBadge}>
-              <MaterialIcons name="cloud-off" size={14} color="#fff" />
-              <Text style={styles.offlineBadgeText}>Offline</Text>
+          {/* Live location indicator */}
+          {liveLocEnabled && isTracking && (
+            <View style={st.liveIndicator}>
+              <View style={st.liveIndicatorDot} />
+              <Text style={st.liveIndicatorText}>LIVE</Text>
             </View>
           )}
+        </View>
+
+        {/* Progress bar */}
+        <View style={st.progressSection}>
+          <View style={st.progressBar}>
+            <View style={[st.progressFill, { width: `${progressPercent}%` }]} />
+          </View>
+          <Text style={st.progressLabel}>
+            {completedLegs}/{totalLegs} legs completed
+          </Text>
         </View>
       </LinearGradient>
 
-      {/* Search + Filters on white */}
-      <View style={styles.filterArea}>
-        <View style={styles.searchBar}>
-          <MaterialIcons name="search" size={20} color="#8E8E93" />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search by name, route, vehicle..."
-            placeholderTextColor="#C7C7CC"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            returnKeyType="search"
-            clearButtonMode="while-editing"
-          />
-          {searchQuery.length > 0 && Platform.OS !== "ios" && (
-            <TouchableOpacity onPress={() => setSearchQuery("")} style={styles.clearButton}>
-              <MaterialIcons name="close" size={18} color="#8E8E93" />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        <View style={styles.filterRow}>
-          {filterOptions.map((opt) => {
-            const isSelected = dateFilter === opt.key;
-            return (
-              <TouchableOpacity
-                key={opt.key}
-                onPress={() => setDateFilter(opt.key)}
-                activeOpacity={0.7}
-                style={[
-                  styles.filterPill,
-                  {
-                    backgroundColor: isSelected ? BLUE : "transparent",
-                    borderColor: isSelected ? BLUE : "#E5E5EA",
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.filterPillText,
-                    { color: isSelected ? "#fff" : "#8E8E93" },
-                  ]}
-                >
-                  {opt.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-          <View style={styles.filterCountContainer}>
-            <Text style={styles.filterCountText}>
-              {filteredSheets.length} {filteredSheets.length === 1 ? "sheet" : "sheets"}
-            </Text>
-          </View>
-        </View>
-      </View>
-
       <ConnectivityBanner />
 
-      {/* Shift Clock Banner */}
+      {/* Shift banner - compact */}
       <TouchableOpacity
-        style={[
-          styles.shiftBanner,
-          { backgroundColor: isClocked ? "#E8F5E9" : "#FFF3E0" },
-        ]}
+        style={[st.shiftBanner, { backgroundColor: isClocked ? "#E8F5E9" : "#FFF8E1" }]}
         onPress={async () => {
-          if (isClocked) {
-            await clockOut();
-          } else if (activeProfile) {
-            await clockIn(activeProfile.id);
-          }
+          if (isClocked) await clockOut();
+          else if (activeProfile) await clockIn(activeProfile.id);
         }}
         activeOpacity={0.7}
       >
-        <MaterialIcons
-          name={isClocked ? "timer" : "timer-off"}
-          size={18}
-          color={isClocked ? "#34C759" : ORANGE}
-        />
-        <View style={styles.shiftBannerContent}>
-          <Text style={styles.shiftBannerTitle}>
-            {isClocked ? "On Shift" : "Off Shift"}
-          </Text>
-          <Text style={styles.shiftBannerSub}>
-            {isClocked
-              ? `Elapsed: ${formatDuration(elapsedMs)}`
-              : "Tap to clock in"}
-          </Text>
-        </View>
-        <View style={[
-          styles.shiftClockBtn,
-          { backgroundColor: isClocked ? "#FF3B30" : "#34C759" },
-        ]}>
-          <Text style={styles.shiftClockBtnText}>
-            {isClocked ? "Clock Out" : "Clock In"}
-          </Text>
+        <MaterialIcons name={isClocked ? "timer" : "timer-off"} size={18} color={isClocked ? GREEN : ORANGE} />
+        <Text style={st.shiftText}>
+          {isClocked ? `On Shift · ${formatDuration(elapsedMs)}` : "Off Shift · Tap to clock in"}
+        </Text>
+        <View style={[st.shiftBtn, { backgroundColor: isClocked ? RED : GREEN }]}>
+          <Text style={st.shiftBtnText}>{isClocked ? "Out" : "In"}</Text>
         </View>
       </TouchableOpacity>
 
-      {/* Live Location Status Banner */}
-      {liveLocEnabled && (
-        <View style={styles.liveLocBanner}>
-          <View style={styles.liveLocDot}>
-            <View style={[styles.liveLocDotInner, { backgroundColor: isTracking ? "#34C759" : ORANGE }]} />
+      {/* Next stop highlight */}
+      {nextLeg && (
+        <TouchableOpacity
+          style={st.nextStopCard}
+          onPress={() => router.push({ pathname: "/leg/[legId]", params: { legId: nextLeg.name, runSheetId: currentJobId } })}
+          activeOpacity={0.8}
+        >
+          <View style={st.nextStopHeader}>
+            <MaterialIcons name="navigation" size={20} color={BLUE} />
+            <Text style={st.nextStopLabel}>NEXT STOP</Text>
           </View>
-          <MaterialIcons
-            name={isTracking ? "my-location" : "location-searching"}
-            size={16}
-            color={isTracking ? "#34C759" : ORANGE}
-          />
-          <Text style={styles.liveLocText}>
-            {isTracking ? "Location sharing active" : "Waiting for GPS..."}
+          <Text style={st.nextStopTitle} numberOfLines={1}>
+            {nextLeg.facility_from || "Pick-up"} → {nextLeg.facility_to || "Drop-off"}
           </Text>
-          {pendingQueueCount > 0 && (
-            <View style={styles.liveLocQueueBadge}>
-              <MaterialIcons
-                name={isSyncingQueue ? "sync" : "cloud-queue"}
-                size={13}
-                color="#fff"
-              />
-              <Text style={styles.liveLocQueueText}>{pendingQueueCount}</Text>
-            </View>
-          )}
+          <View style={st.nextStopAction}>
+            <Text style={st.nextStopActionText}>Tap to complete this leg</Text>
+            <MaterialIcons name="arrow-forward" size={18} color={BLUE} />
+          </View>
+        </TouchableOpacity>
+      )}
+
+      {/* All completed state */}
+      {!nextLeg && totalLegs > 0 && (
+        <View style={st.allDoneCard}>
+          <MaterialIcons name="check-circle" size={40} color={GREEN} />
+          <Text style={st.allDoneTitle}>All Legs Completed!</Text>
+          <Text style={st.allDoneSub}>Great job. All {totalLegs} stops have been finalized.</Text>
         </View>
       )}
 
-      {isLoading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={BLUE} />
-          <Text style={styles.loadingText}>Loading run sheets...</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={filteredSheets}
-          keyExtractor={(item) => item.name}
-          renderItem={renderItem}
-          ListEmptyComponent={renderEmpty}
-          contentContainerStyle={{
-            paddingTop: 8,
-            paddingBottom: 32,
-            flexGrow: filteredSheets.length === 0 ? 1 : undefined,
-          }}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={() => loadData(true)}
-              tintColor={BLUE}
-            />
-          }
-          showsVerticalScrollIndicator={false}
-          style={{ backgroundColor: "#FFFFFF" }}
-        />
-      )}
+      {/* Legs list */}
+      <FlatList
+        data={bundle?.legs || []}
+        keyExtractor={(item) => item.name}
+        renderItem={renderLegItem}
+        contentContainerStyle={{ paddingTop: 8, paddingBottom: 32, paddingHorizontal: 16 }}
+        refreshControl={
+          <RefreshControl refreshing={isRefreshing} onRefresh={() => loadData(true)} tintColor={BLUE} />
+        }
+        showsVerticalScrollIndicator={false}
+        style={{ backgroundColor: "#FFFFFF" }}
+      />
     </ScreenContainer>
   );
 }
 
-const styles = StyleSheet.create({
+const st = StyleSheet.create({
   // Header
-  gradientHeader: {
+  header: {
     paddingHorizontal: 20,
     paddingTop: 8,
     paddingBottom: 16,
   },
-  headerTop: {
+  headerRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "flex-start",
+    justifyContent: "space-between",
   },
   headerTitle: {
     fontSize: 26,
@@ -463,170 +339,228 @@ const styles = StyleSheet.create({
   },
   headerSubtitle: {
     fontSize: 14,
-    color: "rgba(255,255,255,0.7)",
+    color: "rgba(255,255,255,0.75)",
     marginTop: 2,
   },
-  offlineBadge: {
+  liveIndicator: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: 5,
+    backgroundColor: "rgba(255,255,255,0.2)",
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 12,
-    backgroundColor: ORANGE,
   },
-  offlineBadgeText: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-
-  // Filter area
-  filterArea: {
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 10,
-    backgroundColor: "#FFFFFF",
-  },
-  searchBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 12,
-    backgroundColor: "#F5F5F7",
-    paddingHorizontal: 14,
-    height: 44,
-    marginBottom: 12,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    marginLeft: 10,
-    paddingVertical: 0,
-    color: "#1A1A1A",
-  },
-  clearButton: {
-    padding: 4,
-  },
-  filterRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  filterPill: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  filterPillText: {
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  filterCountContainer: {
-    flex: 1,
-    alignItems: "flex-end",
-  },
-  filterCountText: {
-    fontSize: 12,
-    fontWeight: "500",
-    color: "#8E8E93",
-  },
-
-  // Cards
-  card: {
-    borderRadius: 12,
-    padding: 16,
-    marginHorizontal: 16,
-    marginBottom: 8,
-    backgroundColor: "#FFFFFF",
-    ...Platform.select({
-      ios: { shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 6 },
-      android: { elevation: 2 },
-      web: { shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 6 },
-    }),
-  },
-  cardTopRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 4,
-  },
-  cardIdContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    flex: 1,
-    paddingRight: 8,
-  },
-  activePulse: {
+  liveIndicatorDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
+    backgroundColor: GREEN,
   },
-  cardId: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#1A1A1A",
-    flex: 1,
+  liveIndicatorText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#fff",
   },
-  routeName: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#1A1A1A",
-    marginBottom: 10,
-    marginTop: 2,
+  progressSection: {
+    marginTop: 14,
   },
-  progressContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 10,
-  },
-  progressTrack: {
-    flex: 1,
-    height: 6,
-    borderRadius: 3,
+  progressBar: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "rgba(255,255,255,0.25)",
     overflow: "hidden",
-    backgroundColor: "#E5E5EA",
   },
   progressFill: {
-    height: 6,
-    borderRadius: 3,
-    minWidth: 2,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#FFFFFF",
+    minWidth: 4,
   },
-  progressText: {
-    fontSize: 11,
+  progressLabel: {
+    fontSize: 13,
+    color: "rgba(255,255,255,0.8)",
+    marginTop: 6,
     fontWeight: "600",
-    minWidth: 52,
-    textAlign: "right",
-    color: "#8E8E93",
   },
-  cardInfoRow: {
+
+  // Shift banner
+  shiftBanner: {
     flexDirection: "row",
-    flexWrap: "wrap",
     alignItems: "center",
-    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: BORDER,
   },
-  infoItem: {
+  shiftText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "600",
+    color: FG,
+  },
+  shiftBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 14,
+  },
+  shiftBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#fff",
+  },
+
+  // Next stop card
+  nextStopCard: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 16,
+    borderRadius: 14,
+    backgroundColor: "#F0F7FF",
+    borderWidth: 1.5,
+    borderColor: BLUE,
+  },
+  nextStopHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 6,
+  },
+  nextStopLabel: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: BLUE,
+    letterSpacing: 0.5,
+  },
+  nextStopTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: FG,
+    marginBottom: 8,
+  },
+  nextStopAction: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
   },
-  infoText: {
-    fontSize: 12,
-    fontWeight: "500",
-    color: "#8E8E93",
-  },
-  cardArrow: {
-    marginLeft: "auto",
+  nextStopActionText: {
+    fontSize: 14,
+    color: BLUE,
+    fontWeight: "600",
   },
 
-  // Empty
+  // All done
+  allDoneCard: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 24,
+    borderRadius: 14,
+    backgroundColor: "#F0FFF4",
+    borderWidth: 1.5,
+    borderColor: GREEN,
+    alignItems: "center",
+    gap: 8,
+  },
+  allDoneTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: FG,
+  },
+  allDoneSub: {
+    fontSize: 14,
+    color: GRAY,
+    textAlign: "center",
+  },
+
+  // Leg cards
+  legCard: {
+    marginBottom: 8,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    padding: 14,
+    ...Platform.select({
+      ios: { shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4 },
+      android: { elevation: 1 },
+      web: { shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4 },
+    }),
+  },
+  legCardNext: {
+    borderWidth: 1.5,
+    borderColor: BLUE,
+    backgroundColor: "#FAFCFF",
+  },
+  legCardComplete: {
+    opacity: 0.7,
+  },
+  legRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  legStatusCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  legNumber: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#fff",
+  },
+  legInfo: {
+    flex: 1,
+  },
+  legTitle: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: FG,
+  },
+  legTitleComplete: {
+    textDecorationLine: "line-through",
+    color: GRAY,
+  },
+  legMeta: {
+    marginTop: 3,
+  },
+  legMetaComplete: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: GREEN,
+  },
+  legMetaPartial: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: ORANGE,
+  },
+  legMetaNext: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: BLUE,
+  },
+  legMetaPending: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: GRAY,
+  },
+  legAction: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  legActionNext: {
+    backgroundColor: BLUE,
+  },
+
+  // Empty state
   emptyContainer: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 60,
     paddingHorizontal: 32,
   },
   emptyIconCircle: {
@@ -638,104 +572,43 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   emptyTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "700",
-    color: "#1A1A1A",
+    color: FG,
     marginTop: 16,
   },
   emptySubtitle: {
-    fontSize: 14,
-    color: "#8E8E93",
+    fontSize: 15,
+    color: GRAY,
     marginTop: 6,
     textAlign: "center",
-    lineHeight: 20,
+    lineHeight: 22,
   },
+  emptyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: BLUE,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginTop: 24,
+  },
+  emptyBtnText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#fff",
+  },
+
+  // Loading
   loadingContainer: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FFFFFF",
-  },
-  // Live Location Banner
-  liveLocBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: "#F0F8FF",
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#E5E5EA",
-    gap: 8,
-  },
-  liveLocDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  liveLocDotInner: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  liveLocText: {
-    fontSize: 13,
-    fontWeight: "500",
-    color: "#1A1A1A",
-    flex: 1,
-  },
-  liveLocQueueBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-    backgroundColor: ORANGE,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-  },
-  liveLocQueueText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#fff",
   },
   loadingText: {
     fontSize: 14,
-    color: "#8E8E93",
+    color: GRAY,
     marginTop: 12,
-  },
-
-  // Shift Banner
-  shiftBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#E5E5EA",
-    gap: 10,
-  },
-  shiftBannerContent: {
-    flex: 1,
-  },
-  shiftBannerTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#1A1A1A",
-  },
-  shiftBannerSub: {
-    fontSize: 12,
-    color: "#8E8E93",
-    marginTop: 1,
-  },
-  shiftClockBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 16,
-  },
-  shiftClockBtnText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#FFFFFF",
   },
 });

@@ -24,6 +24,7 @@ import { SessionTimeoutProvider, useSessionTimeout } from "@/lib/session-timeout
 import { LiveLocationProvider } from "@/lib/live-location";
 import { GeofenceProvider } from "@/lib/geofence";
 import { ShiftLogProvider } from "@/lib/shift-log";
+import { CurrentJobProvider } from "@/lib/current-job";
 import {
   configureNotifications,
   requestNotificationPermissions,
@@ -173,11 +174,13 @@ export default function RootLayout() {
           <LiveLocationProvider>
           <GeofenceProvider>
           <ShiftLogProvider>
+          <CurrentJobProvider>
           <trpc.Provider client={trpcClient} queryClient={queryClient}>
             <QueryClientProvider client={queryClient}>
               <AppNavigator />
             </QueryClientProvider>
           </trpc.Provider>
+          </CurrentJobProvider>
           </ShiftLogProvider>
           </GeofenceProvider>
           </LiveLocationProvider>

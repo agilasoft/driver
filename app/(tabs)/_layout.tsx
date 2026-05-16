@@ -41,6 +41,15 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
+          title: "Current Job",
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={26} name="shippingbox.fill" color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="run-sheets"
+        options={{
           title: "Run Sheets",
           tabBarIcon: ({ color }) => (
             <IconSymbol size={26} name="doc.text.fill" color={color} />
