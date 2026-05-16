@@ -85,3 +85,4 @@
 - [x] Fix: react-native-maps loading error crashing the app
 - [x] Fix: Navigate to Pick/Drop should use GPS coordinates instead of location names for accuracy
 - [x] Fix: Signature capture not working — rewrote with GestureDetector (react-native-gesture-handler) + reanimated worklets instead of PanResponder
+- [x] Fix: Signature modal has no visible Save button — add prominent Save/Clear buttons in the modal body

@@ -1,11 +1,11 @@
-import React, { useRef, useState, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
-  Platform,
   LayoutChangeEvent,
+  ActivityIndicator,
 } from "react-native";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import Svg, { Path, Line } from "react-native-svg";
@@ -15,18 +15,18 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   Gesture,
   GestureDetector,
-  GestureHandlerRootView,
 } from "react-native-gesture-handler";
 import Animated, {
   useSharedValue,
-  useAnimatedReaction,
   runOnJS,
 } from "react-native-reanimated";
 
 const BLUE = "#3478C6";
+const ORANGE = "#F27A2E";
 const GRAY = "#8E8E93";
 const BORDER = "#E5E5EA";
 const RED = "#FF3B30";
+const GREEN = "#34C759";
 const FG = "#1A1A1A";
 
 export default function SignatureModal() {
@@ -40,10 +40,9 @@ export default function SignatureModal() {
   const [paths, setPaths] = useState<string[]>([]);
   const [currentPath, setCurrentPath] = useState<string>("");
   const [padSize, setPadSize] = useState({ width: 300, height: 220 });
+  const [isSaving, setIsSaving] = useState(false);
 
-  // Use shared values for gesture tracking
   const pathData = useSharedValue("");
-  const allPaths = useSharedValue<string[]>([]);
 
   const onLayout = useCallback((e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
@@ -93,23 +92,29 @@ export default function SignatureModal() {
     pathData.value = "";
   };
 
-  const handleDone = async () => {
+  const handleSave = async () => {
     if (paths.length === 0) {
       router.back();
       return;
     }
+    setIsSaving(true);
+    try {
+      // Store signature data as SVG path string
+      const signatureData = paths.join(" ");
+      const key = `sig_${legId}_${type}`;
+      await AsyncStorage.setItem(key, signatureData);
 
-    // Store signature data as SVG path string
-    const signatureData = paths.join(" ");
-    const key = `sig_${legId}_${type}`;
-    await AsyncStorage.setItem(key, signatureData);
+      // Also store a flag so the leg detail screen knows a signature was captured
+      const flagKey = `sig_flag_${legId}_${type}`;
+      await AsyncStorage.setItem(flagKey, "captured");
 
-    // Also store a flag so the leg detail screen knows a signature was captured
-    const flagKey = `sig_flag_${legId}_${type}`;
-    await AsyncStorage.setItem(flagKey, "captured");
-
-    router.back();
+      router.back();
+    } catch {
+      setIsSaving(false);
+    }
   };
+
+  const hasSignature = paths.length > 0;
 
   return (
     <>
@@ -117,27 +122,19 @@ export default function SignatureModal() {
         options={{
           title: `${type === "pick" ? "Pick-up" : "Drop-off"} Signature`,
           presentation: "modal",
-          headerStyle: { backgroundColor: "#FFFFFF" },
-          headerTintColor: BLUE,
-          headerTitleStyle: { color: FG, fontWeight: "600" },
+          headerStyle: { backgroundColor: BLUE },
+          headerTintColor: "#FFFFFF",
+          headerTitleStyle: { color: "#FFFFFF", fontWeight: "600", fontSize: 17 },
           headerLeft: () => (
             <TouchableOpacity
               onPress={() => router.back()}
               activeOpacity={0.7}
               style={st.headerBtn}
             >
-              <Text style={st.cancelText}>Cancel</Text>
+              <MaterialIcons name="close" size={24} color="#FFFFFF" />
             </TouchableOpacity>
           ),
-          headerRight: () => (
-            <TouchableOpacity
-              onPress={handleDone}
-              activeOpacity={0.7}
-              style={st.headerBtn}
-            >
-              <Text style={st.doneText}>Done</Text>
-            </TouchableOpacity>
-          ),
+          headerRight: () => null,
         }}
       />
       <ScreenContainer edges={["left", "right", "bottom"]} containerClassName="bg-white">
@@ -206,22 +203,52 @@ export default function SignatureModal() {
             </GestureDetector>
           </View>
 
-          {/* Clear Button */}
-          <TouchableOpacity
-            style={st.clearBtn}
-            onPress={handleClear}
-            activeOpacity={0.7}
-          >
-            <MaterialIcons name="refresh" size={18} color={RED} />
-            <Text style={st.clearText}>Clear</Text>
-          </TouchableOpacity>
-
           {/* Stroke count indicator */}
-          {paths.length > 0 ? (
+          {hasSignature ? (
             <Text style={st.strokeCount}>
               {paths.length} stroke{paths.length !== 1 ? "s" : ""} drawn
             </Text>
           ) : null}
+
+          {/* Action Buttons */}
+          <View style={st.buttonRow}>
+            {/* Clear Button */}
+            <TouchableOpacity
+              style={[st.clearBtn, !hasSignature && st.btnDisabled]}
+              onPress={handleClear}
+              activeOpacity={0.7}
+              disabled={!hasSignature}
+            >
+              <MaterialIcons name="refresh" size={20} color={hasSignature ? RED : "#C7C7CC"} />
+              <Text style={[st.clearText, !hasSignature && { color: "#C7C7CC" }]}>Clear</Text>
+            </TouchableOpacity>
+
+            {/* Save Signature Button */}
+            <TouchableOpacity
+              style={[st.saveBtn, !hasSignature && st.saveBtnDisabled]}
+              onPress={handleSave}
+              activeOpacity={0.8}
+              disabled={!hasSignature || isSaving}
+            >
+              {isSaving ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <>
+                  <MaterialIcons name="check" size={22} color="#FFFFFF" />
+                  <Text style={st.saveText}>Save Signature</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* Cancel link */}
+          <TouchableOpacity
+            style={st.cancelLink}
+            onPress={() => router.back()}
+            activeOpacity={0.7}
+          >
+            <Text style={st.cancelLinkText}>Cancel</Text>
+          </TouchableOpacity>
         </View>
       </ScreenContainer>
     </>
@@ -236,7 +263,7 @@ const st = StyleSheet.create({
     paddingHorizontal: 16,
   },
   instructions: {
-    fontSize: 14,
+    fontSize: 15,
     color: GRAY,
     textAlign: "center",
     marginBottom: 16,
@@ -273,32 +300,65 @@ const st = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
-  cancelText: {
-    fontSize: 16,
-    color: BLUE,
+  strokeCount: {
+    fontSize: 13,
+    color: GREEN,
+    fontWeight: "500",
+    marginTop: 12,
   },
-  doneText: {
-    fontSize: 16,
-    color: BLUE,
-    fontWeight: "600",
+  buttonRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 24,
+    width: "100%",
   },
   clearBtn: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 8,
+    paddingVertical: 16,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: RED,
+    backgroundColor: "#FFFFFF",
+  },
+  clearText: {
+    fontSize: 16,
+    color: RED,
+    fontWeight: "600",
+  },
+  btnDisabled: {
+    borderColor: "#E5E5EA",
+    opacity: 0.5,
+  },
+  saveBtn: {
+    flex: 2,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 16,
+    borderRadius: 12,
+    backgroundColor: BLUE,
+  },
+  saveBtnDisabled: {
+    backgroundColor: "#B0C4DE",
+  },
+  saveText: {
+    fontSize: 16,
+    color: "#FFFFFF",
+    fontWeight: "700",
+  },
+  cancelLink: {
     marginTop: 16,
     paddingVertical: 12,
     paddingHorizontal: 24,
   },
-  clearText: {
-    fontSize: 14,
-    color: RED,
-    fontWeight: "500",
-  },
-  strokeCount: {
-    fontSize: 12,
+  cancelLinkText: {
+    fontSize: 15,
     color: GRAY,
-    marginTop: 8,
+    fontWeight: "500",
   },
 });
