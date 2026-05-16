@@ -427,8 +427,8 @@ export default function ProfilePickerScreen() {
           <View style={st.headerLogoBox}>
             <Image
               source={require("@/assets/images/icon.png")}
-              style={{ width: 40, height: 40 }}
-              contentFit="contain"
+              style={{ width: 56, height: 56, borderRadius: 14 }}
+              contentFit="cover"
             />
           </View>
           <Text style={st.headerTitle}>Driver</Text>
@@ -499,7 +499,7 @@ const st = StyleSheet.create({
   header: { paddingTop: 20, paddingBottom: 24, alignItems: "center" },
   headerLogoBox: {
     width: 56, height: 56, borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.2)",
+    backgroundColor: "transparent",
     alignItems: "center", justifyContent: "center", marginBottom: 8,
   },
   headerTitle: { fontSize: 20, fontWeight: "700", color: "#FFFFFF", letterSpacing: -0.3 },
