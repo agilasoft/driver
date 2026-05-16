@@ -27,6 +27,8 @@ import {
   applyLocalChange,
   addPendingChange,
 } from "@/lib/offline-store";
+import { useAuth } from "@/lib/auth-context";
+import { resolveCoordinates } from "@/lib/geocoding";
 
 const BLUE = "#3478C6";
 const ORANGE = "#F27A2E";
@@ -48,8 +50,12 @@ export default function LegDetailScreen() {
   const router = useRouter();
   const { refreshPendingCount } = useSync();
   const { captureLocation, isCapturing } = useLocationCapture();
+  const { auth } = useAuth();
 
   const [leg, setLeg] = useState<TransportLeg | null>(null);
+  // Destination coordinates resolved from addresses (for navigation)
+  const [pickDestCoords, setPickDestCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [dropDestCoords, setDropDestCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -91,6 +97,30 @@ export default function LegDetailScreen() {
           if (found.drop_latitude && found.drop_longitude) {
             setDropGps({ latitude: found.drop_latitude, longitude: found.drop_longitude, accuracy: null });
           }
+
+          // Resolve destination coordinates from addresses for navigation
+          const baseUrl = auth?.siteUrl || "";
+          const headers = auth ? { Authorization: `token ${auth.apiKey}:${auth.apiSecret}` } : undefined;
+          resolveCoordinates({
+            gpsLat: found.pick_latitude,
+            gpsLng: found.pick_longitude,
+            addressName: found.pick_address,
+            facilityName: found.facility_from,
+            baseUrl,
+            headers,
+          }).then((coords) => {
+            if (coords) setPickDestCoords({ latitude: coords.latitude, longitude: coords.longitude });
+          }).catch(() => {});
+          resolveCoordinates({
+            gpsLat: found.drop_latitude,
+            gpsLng: found.drop_longitude,
+            addressName: found.drop_address,
+            facilityName: found.facility_to,
+            baseUrl,
+            headers,
+          }).then((coords) => {
+            if (coords) setDropDestCoords({ latitude: coords.latitude, longitude: coords.longitude });
+          }).catch(() => {});
         }
       }
     } catch (error) {
@@ -98,7 +128,7 @@ export default function LegDetailScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [runSheetId, legId]);
+  }, [runSheetId, legId, auth]);
 
   useEffect(() => { loadLeg(); }, [loadLeg]);
 
@@ -317,8 +347,8 @@ export default function LegDetailScreen() {
                   style={[st.navBtn, { backgroundColor: GREEN }]}
                   onPress={() => openInMaps(
                     leg.pick_address || leg.facility_from || "Pick-up",
-                    pickGps?.latitude,
-                    pickGps?.longitude
+                    pickDestCoords?.latitude,
+                    pickDestCoords?.longitude
                   )}
                   activeOpacity={0.8}
                 >
@@ -329,8 +359,8 @@ export default function LegDetailScreen() {
                   style={[st.navBtn, { backgroundColor: RED }]}
                   onPress={() => openInMaps(
                     leg.drop_address || leg.facility_to || "Drop-off",
-                    dropGps?.latitude,
-                    dropGps?.longitude
+                    dropDestCoords?.latitude,
+                    dropDestCoords?.longitude
                   )}
                   activeOpacity={0.8}
                 >

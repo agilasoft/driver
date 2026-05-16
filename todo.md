@@ -83,3 +83,4 @@
 - [x] Remove map-view components (native, web, d.ts) and route-map screen
 - [x] Replace all in-app map references with external Google Maps / Apple Maps links
 - [x] Fix: react-native-maps loading error crashing the app
+- [x] Fix: Navigate to Pick/Drop should use GPS coordinates instead of location names for accuracy
