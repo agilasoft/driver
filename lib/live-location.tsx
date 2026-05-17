@@ -221,10 +221,23 @@ export function LiveLocationProvider({ children }: { children: React.ReactNode }
   const [intervalMs, setIntervalMsState] = useState(DEFAULT_INTERVAL_MS);
   const [pendingQueueCount, setPendingQueueCount] = useState(0);
   const [isSyncingQueue, setIsSyncingQueue] = useState(false);
+
+  // Use refs for values needed inside callbacks to avoid re-creating effects
   const subscriberRef = useRef<Location.LocationSubscription | null>(null);
   const webIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const isSyncingRef = useRef(false);
+  const isEnabledRef = useRef(false);
+  const intervalMsRef = useRef(DEFAULT_INTERVAL_MS);
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    isEnabledRef.current = isEnabled;
+  }, [isEnabled]);
+
+  useEffect(() => {
+    intervalMsRef.current = intervalMs;
+  }, [intervalMs]);
 
   // Load persisted settings and queue count
   useEffect(() => {
@@ -242,34 +255,7 @@ export function LiveLocationProvider({ children }: { children: React.ReactNode }
     })();
   }, []);
 
-  // Handle a new location update: try to push, queue if offline
-  const handleLocationUpdate = useCallback(async (update: LocationUpdate) => {
-    setLastUpdate(update);
-    setIsTracking(true);
-
-    const online = await isOnline();
-    if (online) {
-      // Try to push directly
-      const ok = await pushLocationToServer(update);
-      if (!ok) {
-        // Push failed — queue it
-        const count = await enqueueUpdate(update);
-        setPendingQueueCount(count);
-      } else {
-        // Success — also try to flush any pending queue
-        const queue = await loadQueue();
-        if (queue.length > 0 && !isSyncingRef.current) {
-          flushQueueInternal();
-        }
-      }
-    } else {
-      // Offline — queue the update
-      const count = await enqueueUpdate(update);
-      setPendingQueueCount(count);
-    }
-  }, []);
-
-  // Flush the offline queue
+  // Flush the offline queue — stable ref, no deps that change
   const flushQueueInternal = useCallback(async () => {
     if (isSyncingRef.current) return;
     isSyncingRef.current = true;
@@ -284,7 +270,6 @@ export function LiveLocationProvider({ children }: { children: React.ReactNode }
 
       const pushed = await pushBatch(queue);
       if (pushed > 0) {
-        // Remove pushed items from queue
         const remaining = queue.slice(pushed);
         if (remaining.length === 0) {
           await clearQueue();
@@ -301,68 +286,49 @@ export function LiveLocationProvider({ children }: { children: React.ReactNode }
     }
   }, []);
 
-  // Public flush method
-  const flushQueue = useCallback(async () => {
-    await flushQueueInternal();
+  // Handle a new location update: try to push, queue if offline
+  // This is stable — no state deps, uses no changing refs
+  const handleLocationUpdate = useCallback(async (update: LocationUpdate) => {
+    setLastUpdate(update);
+    setIsTracking(true);
+
+    const online = await isOnline();
+    if (online) {
+      const ok = await pushLocationToServer(update);
+      if (!ok) {
+        const count = await enqueueUpdate(update);
+        setPendingQueueCount(count);
+      } else {
+        const queue = await loadQueue();
+        if (queue.length > 0 && !isSyncingRef.current) {
+          flushQueueInternal();
+        }
+      }
+    } else {
+      const count = await enqueueUpdate(update);
+      setPendingQueueCount(count);
+    }
   }, [flushQueueInternal]);
 
-  // Start/stop tracking based on isEnabled
-  useEffect(() => {
-    if (!isEnabled) {
-      stopTracking();
-      return;
+  // Stable stop function using refs only
+  const stopTracking = useCallback(() => {
+    if (subscriberRef.current) {
+      subscriberRef.current.remove();
+      subscriberRef.current = null;
     }
+    if (webIntervalRef.current) {
+      clearInterval(webIntervalRef.current);
+      webIntervalRef.current = null;
+    }
+    setIsTracking(false);
+  }, []);
 
-    startTracking();
-
-    return () => {
-      stopTracking();
-    };
-  }, [isEnabled, intervalMs]);
-
-  // Pause/resume on app state changes + flush queue when coming back online
-  useEffect(() => {
-    const sub = AppState.addEventListener("change", async (nextState) => {
-      if (appStateRef.current.match(/inactive|background/) && nextState === "active") {
-        // App came to foreground — resume tracking and try to flush queue
-        if (isEnabled) startTracking();
-        // Try to flush any queued updates
-        const queue = await loadQueue();
-        if (queue.length > 0) {
-          const online = await isOnline();
-          if (online) flushQueueInternal();
-        }
-      } else if (nextState.match(/inactive|background/)) {
-        // App went to background — stop web interval (native subscriber continues)
-        if (Platform.OS === "web" && webIntervalRef.current) {
-          clearInterval(webIntervalRef.current);
-          webIntervalRef.current = null;
-        }
-      }
-      appStateRef.current = nextState;
-    });
-
-    return () => sub.remove();
-  }, [isEnabled, flushQueueInternal]);
-
-  // Periodic queue flush attempt (every 60s when enabled)
-  useEffect(() => {
-    if (!isEnabled) return;
-
-    const flushInterval = setInterval(async () => {
-      const queue = await loadQueue();
-      if (queue.length > 0) {
-        const online = await isOnline();
-        if (online) flushQueueInternal();
-      }
-    }, 60000);
-
-    return () => clearInterval(flushInterval);
-  }, [isEnabled, flushQueueInternal]);
-
-  const startTracking = async () => {
+  // Stable start function using refs for intervalMs
+  const startTracking = useCallback(async () => {
     // Stop any existing tracking first
     stopTracking();
+
+    const currentInterval = intervalMsRef.current;
 
     if (Platform.OS === "web") {
       if (!navigator.geolocation) return;
@@ -386,7 +352,7 @@ export function LiveLocationProvider({ children }: { children: React.ReactNode }
       };
 
       tick();
-      webIntervalRef.current = setInterval(tick, intervalMs);
+      webIntervalRef.current = setInterval(tick, currentInterval);
       return;
     }
 
@@ -401,7 +367,7 @@ export function LiveLocationProvider({ children }: { children: React.ReactNode }
       const subscriber = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.High,
-          timeInterval: intervalMs,
+          timeInterval: currentInterval,
           distanceInterval: 10,
         },
         (location) => {
@@ -421,19 +387,62 @@ export function LiveLocationProvider({ children }: { children: React.ReactNode }
     } catch (error) {
       console.warn("Failed to start location tracking:", error);
     }
-  };
+  }, [stopTracking, handleLocationUpdate]);
 
-  const stopTracking = () => {
-    if (subscriberRef.current) {
-      subscriberRef.current.remove();
-      subscriberRef.current = null;
+  // Start/stop tracking based on isEnabled and intervalMs
+  // This effect only fires when isEnabled or intervalMs actually change
+  useEffect(() => {
+    if (!isEnabled) {
+      stopTracking();
+      return;
     }
-    if (webIntervalRef.current) {
-      clearInterval(webIntervalRef.current);
-      webIntervalRef.current = null;
-    }
-    setIsTracking(false);
-  };
+
+    startTracking();
+
+    return () => {
+      stopTracking();
+    };
+  }, [isEnabled, intervalMs, startTracking, stopTracking]);
+
+  // Pause/resume on app state changes + flush queue when coming back online
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", async (nextState) => {
+      if (appStateRef.current.match(/inactive|background/) && nextState === "active") {
+        // App came to foreground — resume tracking and try to flush queue
+        if (isEnabledRef.current) startTracking();
+        // Try to flush any queued updates
+        const queue = await loadQueue();
+        if (queue.length > 0) {
+          const online = await isOnline();
+          if (online) flushQueueInternal();
+        }
+      } else if (nextState.match(/inactive|background/)) {
+        // App went to background — stop web interval (native subscriber continues)
+        if (Platform.OS === "web" && webIntervalRef.current) {
+          clearInterval(webIntervalRef.current);
+          webIntervalRef.current = null;
+        }
+      }
+      appStateRef.current = nextState;
+    });
+
+    return () => sub.remove();
+  }, [startTracking, flushQueueInternal]);
+
+  // Periodic queue flush attempt (every 60s when enabled)
+  useEffect(() => {
+    if (!isEnabled) return;
+
+    const flushInterval = setInterval(async () => {
+      const queue = await loadQueue();
+      if (queue.length > 0) {
+        const online = await isOnline();
+        if (online) flushQueueInternal();
+      }
+    }, 60000);
+
+    return () => clearInterval(flushInterval);
+  }, [isEnabled, flushQueueInternal]);
 
   const setEnabled = useCallback(async (enabled: boolean) => {
     setIsEnabledState(enabled);
@@ -444,6 +453,11 @@ export function LiveLocationProvider({ children }: { children: React.ReactNode }
     setIntervalMsState(ms);
     await AsyncStorage.setItem(LIVE_LOCATION_INTERVAL_KEY, ms.toString());
   }, []);
+
+  // Public flush method
+  const flushQueue = useCallback(async () => {
+    await flushQueueInternal();
+  }, [flushQueueInternal]);
 
   return (
     <LiveLocationContext.Provider

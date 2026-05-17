@@ -20,6 +20,7 @@ import { ScreenContainer } from "@/components/screen-container";
 import { useAuth } from "@/lib/auth-context";
 import { LinearGradient } from "expo-linear-gradient";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   type DriverProfile,
   verifyPin,
@@ -201,6 +202,7 @@ function SwipeableProfileCard({
 
 export default function ProfilePickerScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { profiles, switchToProfile, removeProfile, loadProfiles, isLoading } = useAuth();
   const [unlockingProfile, setUnlockingProfile] = useState<DriverProfile | null>(null);
   const [pinInput, setPinInput] = useState("");
@@ -334,13 +336,13 @@ export default function ProfilePickerScreen() {
       (name || "?").split(" ").map((w) => w[0]).join("").toUpperCase().substring(0, 2);
 
     return (
-      <ScreenContainer edges={["top", "bottom", "left", "right"]} className="flex-1">
+      <ScreenContainer edges={["bottom", "left", "right"]} className="flex-1">
         <View style={st.pinOverlay}>
           <LinearGradient
             colors={[BLUE, BLUE_LIGHT]}
             start={{ x: 0, y: 0 }}
             end={{ x: 0, y: 1 }}
-            style={st.pinGradientHeader}
+            style={[st.pinGradientHeader, { paddingTop: insets.top + 8 }]}
           >
             <TouchableOpacity
               style={st.pinBackBtn}
@@ -406,7 +408,7 @@ export default function ProfilePickerScreen() {
 
   if (isLoading) {
     return (
-      <ScreenContainer edges={["top", "bottom", "left", "right"]} className="flex-1">
+      <ScreenContainer edges={["bottom", "left", "right"]} className="flex-1">
         <View style={st.center}>
           <ActivityIndicator size="large" color={BLUE} />
         </View>
@@ -415,14 +417,14 @@ export default function ProfilePickerScreen() {
   }
 
   return (
-    <ScreenContainer edges={["top", "bottom", "left", "right"]} className="flex-1">
+    <ScreenContainer edges={["bottom", "left", "right"]} className="flex-1">
       <View style={st.container}>
         {/* Blue gradient header — matches CargoNext */}
         <LinearGradient
           colors={[BLUE, BLUE_LIGHT]}
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
-          style={st.header}
+          style={[st.header, { paddingTop: insets.top + 20 }]}
         >
           <View style={st.headerLogoBox}>
             <Image
@@ -496,7 +498,7 @@ const st = StyleSheet.create({
   center: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#FFFFFF" },
 
   // Header
-  header: { paddingTop: 20, paddingBottom: 24, alignItems: "center" },
+  header: { paddingBottom: 24, alignItems: "center" },
   headerLogoBox: {
     width: 56, height: 56, borderRadius: 14,
     backgroundColor: "transparent",

@@ -91,3 +91,6 @@
 - [x] Simplify UI for drivers: larger touch targets, clearer flow, minimal clutter
 - [x] Add "current job" state management (persist selected run sheet as active job)
 - [x] Fix: Blue header gradient should stretch to top edge behind status bar indicators
+- [x] Fix: Profile picker page header gradient should extend to top edge behind status bar
+- [x] Fix: GPS location keeps turning on and off repeatedly
+- [x] Fix: Cannot select current run sheet from Run Sheets tab
