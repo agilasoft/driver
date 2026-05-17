@@ -25,6 +25,7 @@ import {
   getCachedBundle,
 } from "@/lib/offline-store";
 import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const BLUE = "#3478C6";
 const BLUE_LIGHT = "#5B9BD5";
@@ -44,6 +45,7 @@ export default function RunSheetsScreen() {
   const { isOnline } = useSync();
   const { auth } = useAuth();
   const { currentJobId, setCurrentJob } = useCurrentJob();
+  const insets = useSafeAreaInsets();
   const [sheets, setSheets] = useState<RunSheet[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -226,9 +228,9 @@ export default function RunSheetsScreen() {
   };
 
   return (
-    <ScreenContainer containerClassName="bg-white">
+    <ScreenContainer edges={["left", "right"]} containerClassName="bg-white">
       {/* Header */}
-      <LinearGradient colors={[BLUE, BLUE_LIGHT]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={st.header}>
+      <LinearGradient colors={[BLUE, BLUE_LIGHT]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={[st.header, { paddingTop: insets.top + 8 }]}>
         <View style={st.headerRow}>
           <Text style={st.headerTitle}>Run Sheets</Text>
           {!isOnline && (

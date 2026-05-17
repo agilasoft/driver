@@ -90,3 +90,4 @@
 - [x] Add Run Sheets as second tab where driver can select and make a run sheet the current job
 - [x] Simplify UI for drivers: larger touch targets, clearer flow, minimal clutter
 - [x] Add "current job" state management (persist selected run sheet as active job)
+- [x] Fix: Blue header gradient should stretch to top edge behind status bar indicators
