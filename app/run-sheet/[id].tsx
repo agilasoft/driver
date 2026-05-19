@@ -286,7 +286,7 @@ export default function RunSheetDetailScreen() {
 
     return (
       <TouchableOpacity
-        onPress={() => { recordActivity(); router.push({ pathname: "/leg/[legId]", params: { legId: item.name, runSheetId: id || "" } }); }}
+        onPress={() => { recordActivity(); router.push(`/leg/${item.name}?runSheetId=${id || ""}` as any); }}
         activeOpacity={0.7}
         style={[
           st.legCard,

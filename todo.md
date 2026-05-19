@@ -100,3 +100,4 @@
 - [x] Fix: App shows "Unmatched Route" on launch via deep link scheme (manus20260513075651:///)
 - [x] Fix: Clicking leg navigates to home page instead of leg detail screen
 - [x] Update: Check Transport Leg doctype for field changes and update app accordingly
+- [x] Fix: Leg navigation still broken — removed +native-intent.tsx, disabled session timeout guard, switched to string-based href navigation, registered all routes in Stack

@@ -1,8 +1,8 @@
 import "@/global.css";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack, useRouter, useSegments, usePathname } from "expo-router";
+import { Stack, useRouter, usePathname } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
 import { Platform, ActivityIndicator, View } from "react-native";
@@ -40,10 +40,9 @@ const DEFAULT_WEB_FRAME: Rect = { x: 0, y: 0, width: 0, height: 0 };
 configureNotifications();
 
 function AppNavigator() {
-  const { auth, isLoading, activeProfile, signOut } = useAuth();
-  const { isTimedOut, resetTimeout, recordActivity } = useSessionTimeout();
+  const { auth, isLoading } = useAuth();
+  const { recordActivity } = useSessionTimeout();
   const router = useRouter();
-  const segments = useSegments();
   const pathname = usePathname();
 
   // Global activity tracker: any navigation change = user is active
@@ -83,31 +82,9 @@ function AppNavigator() {
     return () => subscription.remove();
   }, [auth?.isLoggedIn, router]);
 
-  // Navigation guard: redirect to profile-picker when session times out
-  // Only redirect if the user is currently on a protected route
-  // Uses a ref to prevent the guard from firing multiple times
-  const isSigningOutRef = useRef(false);
-  useEffect(() => {
-    if (isTimedOut && auth?.isLoggedIn && activeProfile && !isSigningOutRef.current) {
-      // Check if user is on a protected route (tabs, leg, run-sheet, etc.)
-      const firstSegment = segments[0];
-      const isOnProtectedRoute =
-        firstSegment === "(tabs)" ||
-        firstSegment === "leg" ||
-        firstSegment === "run-sheet" ||
-        firstSegment === "signature-modal" ||
-        firstSegment === "barcode-scanner";
-
-      if (isOnProtectedRoute) {
-        isSigningOutRef.current = true;
-        signOut().then(() => {
-          router.replace("/profile-picker");
-          // Reset after a delay to allow re-login
-          setTimeout(() => { isSigningOutRef.current = false; }, 1000);
-        });
-      }
-    }
-  }, [isTimedOut, auth?.isLoggedIn, activeProfile, signOut, router, segments]);
+  // Navigation guard: DISABLED — session timeout does not auto-redirect.
+  // The timeout feature only shows a lock overlay if re-enabled in the future.
+  // This was causing false redirects to profile-picker during active navigation.
 
   if (isLoading) {
     return (
@@ -132,6 +109,8 @@ function AppNavigator() {
         <Stack.Screen name="leg/[legId]" options={{ headerShown: true }} />
         <Stack.Screen name="signature-modal" options={{ presentation: "modal", headerShown: true }} />
         <Stack.Screen name="barcode-scanner" options={{ presentation: "modal", headerShown: true }} />
+        <Stack.Screen name="dev/theme-lab" options={{ headerShown: true }} />
+        <Stack.Screen name="+not-found" options={{ headerShown: false }} />
       </Stack>
       <StatusBar style="auto" />
     </>
