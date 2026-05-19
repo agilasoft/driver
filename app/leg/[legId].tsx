@@ -29,6 +29,7 @@ import {
 } from "@/lib/offline-store";
 import { useAuth } from "@/lib/auth-context";
 import { useSessionTimeout } from "@/lib/session-timeout";
+import { useCurrentJob } from "@/lib/current-job";
 import { resolveCoordinates } from "@/lib/geocoding";
 import { SignaturePreview } from "@/components/signature-preview";
 
@@ -48,12 +49,15 @@ interface BarcodeRecord {
 }
 
 export default function LegDetailScreen() {
-  const { legId, runSheetId } = useLocalSearchParams<{ legId: string; runSheetId: string }>();
+  const { legId, runSheetId: paramRunSheetId } = useLocalSearchParams<{ legId: string; runSheetId: string }>();
   const router = useRouter();
   const { refreshPendingCount } = useSync();
   const { captureLocation, isCapturing } = useLocationCapture();
   const { auth } = useAuth();
   const { recordActivity } = useSessionTimeout();
+  const { currentJobId } = useCurrentJob();
+  // Use runSheetId from params, fall back to currentJobId from context
+  const runSheetId = paramRunSheetId || currentJobId || "";
 
   const [leg, setLeg] = useState<TransportLeg | null>(null);
   // Destination coordinates resolved from addresses (for navigation)
@@ -78,13 +82,34 @@ export default function LegDetailScreen() {
   const [dropNotes, setDropNotes] = useState("");
 
   const loadLeg = useCallback(async () => {
-    if (!runSheetId || !legId) return;
+    if (!legId) return;
     setIsLoading(true);
     try {
-      const bundle = await getCachedBundle(runSheetId);
-      if (bundle) {
-        const found = bundle.legs.find((l) => l.name === legId);
-        if (found) {
+      // Try to find the leg in the specified run sheet bundle
+      let found: TransportLeg | undefined;
+      if (runSheetId) {
+        const bundle = await getCachedBundle(runSheetId);
+        if (bundle) {
+          found = bundle.legs.find((l) => l.name === legId);
+        }
+      }
+      // Fallback: search all cached bundles if not found
+      if (!found) {
+        const allKeys = await AsyncStorage.getAllKeys();
+        const bundleKeys = allKeys.filter((k) => k.startsWith("offline_bundle_"));
+        for (const key of bundleKeys) {
+          const raw = await AsyncStorage.getItem(key);
+          if (raw) {
+            const b = JSON.parse(raw);
+            const match = b?.legs?.find((l: any) => l.name === legId);
+            if (match) {
+              found = match;
+              break;
+            }
+          }
+        }
+      }
+      if (found) {
           setLeg(found);
           setPickSignedBy(found.pick_signed_by || "");
           setDropSignedBy(found.drop_signed_by || "");
@@ -124,7 +149,6 @@ export default function LegDetailScreen() {
           }).then((coords) => {
             if (coords) setDropDestCoords({ latitude: coords.latitude, longitude: coords.longitude });
           }).catch(() => {});
-        }
       }
     } catch (error) {
       console.warn("Failed to load leg:", error);

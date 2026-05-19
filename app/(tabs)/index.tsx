@@ -127,7 +127,7 @@ export default function CurrentJobScreen() {
 
     return (
       <TouchableOpacity
-        onPress={() => { recordActivity(); router.push(`/leg/${item.name}?runSheetId=${currentJobId || ""}` as any); }}
+        onPress={() => { recordActivity(); router.push({ pathname: "/leg/[legId]", params: { legId: item.name, runSheetId: currentJobId || "" } } as any); }}
         activeOpacity={0.7}
         style={[
           st.legCard,
@@ -281,7 +281,7 @@ export default function CurrentJobScreen() {
       {nextLeg && (
         <TouchableOpacity
           style={st.nextStopCard}
-          onPress={() => { recordActivity(); router.push(`/leg/${nextLeg.name}?runSheetId=${currentJobId || ""}` as any); }}
+          onPress={() => { recordActivity(); router.push({ pathname: "/leg/[legId]", params: { legId: nextLeg.name, runSheetId: currentJobId || "" } } as any); }}
           activeOpacity={0.8}
         >
           <View style={st.nextStopHeader}>
