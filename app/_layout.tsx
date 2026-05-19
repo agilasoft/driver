@@ -1,6 +1,6 @@
 import "@/global.css";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -31,7 +31,6 @@ import {
   startAssignmentPolling,
   stopAssignmentPolling,
 } from "@/lib/notifications";
-import { useRouter } from "expo-router";
 import * as Notifications from "expo-notifications";
 
 const DEFAULT_WEB_INSETS: EdgeInsets = { top: 0, right: 0, bottom: 0, left: 0 };
@@ -44,6 +43,7 @@ function AppNavigator() {
   const { auth, isLoading, activeProfile, signOut } = useAuth();
   const { isTimedOut, resetTimeout, recordActivity } = useSessionTimeout();
   const router = useRouter();
+  const segments = useSegments();
 
   // Start/stop assignment polling based on auth state
   useEffect(() => {
@@ -75,16 +75,26 @@ function AppNavigator() {
     return () => subscription.remove();
   }, [auth?.isLoggedIn, router]);
 
-  // Auto-lock on session timeout
+  // Navigation guard: redirect to profile-picker when session times out
+  // Only redirect if the user is currently on a protected route
   useEffect(() => {
     if (isTimedOut && auth?.isLoggedIn && activeProfile) {
-      signOut().then(() => {
-        router.replace("/profile-picker");
-      });
-    }
-  }, [isTimedOut, auth?.isLoggedIn, activeProfile, signOut, router]);
+      // Check if user is on a protected route (tabs, leg, run-sheet, etc.)
+      const firstSegment = segments[0];
+      const isOnProtectedRoute =
+        firstSegment === "(tabs)" ||
+        firstSegment === "leg" ||
+        firstSegment === "run-sheet" ||
+        firstSegment === "signature-modal" ||
+        firstSegment === "barcode-scanner";
 
-  const isUnlocked = auth?.isLoggedIn && activeProfile && !isTimedOut;
+      if (isOnProtectedRoute) {
+        signOut().then(() => {
+          router.replace("/profile-picker");
+        });
+      }
+    }
+  }, [isTimedOut, auth?.isLoggedIn, activeProfile, signOut, router, segments]);
 
   if (isLoading) {
     return (
@@ -97,22 +107,18 @@ function AppNavigator() {
   return (
     <>
       <Stack screenOptions={{ headerShown: false }}>
-        {/* Root index always redirects to profile-picker */}
+        {/* All routes are always registered — no conditional mounting */}
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="profile-picker" options={{ headerShown: false }} />
         <Stack.Screen name="login" options={{ presentation: "fullScreenModal", headerShown: false }} />
         <Stack.Screen name="config-scanner" options={{ presentation: "modal", headerShown: true }} />
         <Stack.Screen name="edit-profile" options={{ presentation: "fullScreenModal", headerShown: false }} />
         <Stack.Screen name="oauth/callback" options={{ headerShown: false }} />
-        {isUnlocked ? (
-          <>
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="run-sheet/[id]" options={{ headerShown: true }} />
-            <Stack.Screen name="leg/[legId]" options={{ headerShown: true }} />
-            <Stack.Screen name="signature-modal" options={{ presentation: "modal", headerShown: true }} />
-            <Stack.Screen name="barcode-scanner" options={{ presentation: "modal", headerShown: true }} />
-          </>
-        ) : null}
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="run-sheet/[id]" options={{ headerShown: true }} />
+        <Stack.Screen name="leg/[legId]" options={{ headerShown: true }} />
+        <Stack.Screen name="signature-modal" options={{ presentation: "modal", headerShown: true }} />
+        <Stack.Screen name="barcode-scanner" options={{ presentation: "modal", headerShown: true }} />
       </Stack>
       <StatusBar style="auto" />
     </>
