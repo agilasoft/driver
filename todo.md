@@ -98,3 +98,5 @@
 - [x] Fix: GPS location is flickering — check if permissions are properly requested
 - [x] Feature: Display captured signature drawing on Leg Detail screen (render SVG paths)
 - [x] Fix: App shows "Unmatched Route" on launch via deep link scheme (manus20260513075651:///)
+- [x] Fix: Clicking leg navigates to home page instead of leg detail screen
+- [x] Update: Check Transport Leg doctype for field changes and update app accordingly

@@ -21,6 +21,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useCurrentJob } from "@/lib/current-job";
 import { useLiveLocation } from "@/lib/live-location";
 import { useShiftLog, formatDuration } from "@/lib/shift-log";
+import { useSessionTimeout } from "@/lib/session-timeout";
 import type { RunSheetBundle, TransportLeg } from "@/lib/types";
 import {
   getCachedBundle,
@@ -48,6 +49,7 @@ export default function CurrentJobScreen() {
   const { currentJobId } = useCurrentJob();
   const { isEnabled: liveLocEnabled, isTracking } = useLiveLocation();
   const { isClocked, elapsedMs, clockIn, clockOut } = useShiftLog();
+  const { recordActivity } = useSessionTimeout();
 
   const [bundle, setBundle] = useState<RunSheetBundle | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -125,7 +127,7 @@ export default function CurrentJobScreen() {
 
     return (
       <TouchableOpacity
-        onPress={() => router.push({ pathname: "/leg/[legId]", params: { legId: item.name, runSheetId: currentJobId || "" } })}
+        onPress={() => { recordActivity(); router.push({ pathname: "/leg/[legId]", params: { legId: item.name, runSheetId: currentJobId || "" } }); }}
         activeOpacity={0.7}
         style={[
           st.legCard,
@@ -279,7 +281,7 @@ export default function CurrentJobScreen() {
       {nextLeg && (
         <TouchableOpacity
           style={st.nextStopCard}
-          onPress={() => router.push({ pathname: "/leg/[legId]", params: { legId: nextLeg.name, runSheetId: currentJobId } })}
+          onPress={() => { recordActivity(); router.push({ pathname: "/leg/[legId]", params: { legId: nextLeg.name, runSheetId: currentJobId } }); }}
           activeOpacity={0.8}
         >
           <View style={st.nextStopHeader}>

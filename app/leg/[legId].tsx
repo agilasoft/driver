@@ -28,6 +28,7 @@ import {
   addPendingChange,
 } from "@/lib/offline-store";
 import { useAuth } from "@/lib/auth-context";
+import { useSessionTimeout } from "@/lib/session-timeout";
 import { resolveCoordinates } from "@/lib/geocoding";
 import { SignaturePreview } from "@/components/signature-preview";
 
@@ -52,6 +53,7 @@ export default function LegDetailScreen() {
   const { refreshPendingCount } = useSync();
   const { captureLocation, isCapturing } = useLocationCapture();
   const { auth } = useAuth();
+  const { recordActivity } = useSessionTimeout();
 
   const [leg, setLeg] = useState<TransportLeg | null>(null);
   // Destination coordinates resolved from addresses (for navigation)
@@ -145,6 +147,7 @@ export default function LegDetailScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      recordActivity();
       (async () => {
         if (!legId) return;
         const pickFlag = await AsyncStorage.getItem(`sig_flag_${legId}_pick`);
@@ -159,7 +162,7 @@ export default function LegDetailScreen() {
         }
         await loadBarcodes();
       })();
-    }, [legId, loadBarcodes])
+    }, [legId, loadBarcodes, recordActivity])
   );
 
   const recordTimestamp = async (type: "pick" | "drop") => {
@@ -200,6 +203,7 @@ export default function LegDetailScreen() {
   };
 
   const handleSave = async () => {
+    recordActivity();
     if (!leg || !runSheetId) return;
     setIsSaving(true);
     try {
