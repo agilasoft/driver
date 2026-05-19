@@ -94,3 +94,5 @@
 - [x] Fix: Profile picker page header gradient should extend to top edge behind status bar
 - [x] Fix: GPS location keeps turning on and off repeatedly
 - [x] Fix: Cannot select current run sheet from Run Sheets tab
+- [x] Fix: PIN entry screen is flickering
+- [x] Fix: GPS location is flickering — check if permissions are properly requested
