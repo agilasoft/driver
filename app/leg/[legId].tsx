@@ -29,6 +29,7 @@ import {
 } from "@/lib/offline-store";
 import { useAuth } from "@/lib/auth-context";
 import { resolveCoordinates } from "@/lib/geocoding";
+import { SignaturePreview } from "@/components/signature-preview";
 
 const BLUE = "#3478C6";
 const ORANGE = "#F27A2E";
@@ -403,12 +404,14 @@ export default function LegDetailScreen() {
               <View style={st.fieldSpacer} />
 
               <FieldLabel label="Signature" />
-              <TouchableOpacity style={st.signatureBtn} onPress={() => captureSignature("pick")} activeOpacity={0.7}>
+              <TouchableOpacity style={[st.signatureBtn, pickSignature ? st.signatureBtnWithPreview : undefined]} onPress={() => captureSignature("pick")} activeOpacity={0.7}>
                 {pickSignature ? (
-                  <View style={st.signatureCaptured}>
-                    <MaterialIcons name="check-circle" size={24} color={GREEN} />
-                    <Text style={[st.signatureText, { color: GREEN }]}>Signature captured</Text>
-                    <Text style={st.signatureTap}>Tap to redo</Text>
+                  <View style={st.signaturePreviewContainer}>
+                    <SignaturePreview pathData={pickSignature} width={260} height={70} />
+                    <View style={st.signatureRedoRow}>
+                      <MaterialIcons name="check-circle" size={14} color={GREEN} />
+                      <Text style={st.signatureRedoText}>Tap to redo</Text>
+                    </View>
                   </View>
                 ) : (
                   <View style={st.signatureEmpty}>
@@ -493,12 +496,14 @@ export default function LegDetailScreen() {
               <View style={st.fieldSpacer} />
 
               <FieldLabel label="Signature" />
-              <TouchableOpacity style={st.signatureBtn} onPress={() => captureSignature("drop")} activeOpacity={0.7}>
+              <TouchableOpacity style={[st.signatureBtn, dropSignature ? st.signatureBtnWithPreview : undefined]} onPress={() => captureSignature("drop")} activeOpacity={0.7}>
                 {dropSignature ? (
-                  <View style={st.signatureCaptured}>
-                    <MaterialIcons name="check-circle" size={24} color={GREEN} />
-                    <Text style={[st.signatureText, { color: GREEN }]}>Signature captured</Text>
-                    <Text style={st.signatureTap}>Tap to redo</Text>
+                  <View style={st.signaturePreviewContainer}>
+                    <SignaturePreview pathData={dropSignature} width={260} height={70} />
+                    <View style={st.signatureRedoRow}>
+                      <MaterialIcons name="check-circle" size={14} color={GREEN} />
+                      <Text style={st.signatureRedoText}>Tap to redo</Text>
+                    </View>
                   </View>
                 ) : (
                   <View style={st.signatureEmpty}>
@@ -620,7 +625,10 @@ const st = StyleSheet.create({
   gpsText: { fontSize: 12, fontWeight: "500" },
   gpsAccuracy: { fontSize: 12, marginLeft: 2, color: GRAY },
   signatureBtn: { borderRadius: 12, borderWidth: 1, borderColor: BORDER, height: 100, alignItems: "center", justifyContent: "center", backgroundColor: SURFACE },
-  signatureCaptured: { alignItems: "center", gap: 4 },
+  signatureBtnWithPreview: { height: 110, paddingVertical: 8 },
+  signaturePreviewContainer: { alignItems: "center", gap: 4 },
+  signatureRedoRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  signatureRedoText: { fontSize: 11, color: GRAY },
   signatureEmpty: { alignItems: "center", gap: 6 },
   signatureText: { fontSize: 14, fontWeight: "600" },
   signatureTap: { fontSize: 12, color: GRAY },

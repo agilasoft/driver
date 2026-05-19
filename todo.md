@@ -96,3 +96,4 @@
 - [x] Fix: Cannot select current run sheet from Run Sheets tab
 - [x] Fix: PIN entry screen is flickering
 - [x] Fix: GPS location is flickering — check if permissions are properly requested
+- [x] Feature: Display captured signature drawing on Leg Detail screen (render SVG paths)
