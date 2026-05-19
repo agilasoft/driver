@@ -26,6 +26,7 @@ import {
   checkBiometricAvailability,
   authenticateWithBiometric,
 } from "@/lib/profile-manager";
+import { useSessionTimeout } from "@/lib/session-timeout";
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -298,6 +299,7 @@ export default function ProfilePickerScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { profiles, switchToProfile, removeProfile, loadProfiles, isLoading } = useAuth();
+  const { resetTimeout } = useSessionTimeout();
   const [unlockingProfile, setUnlockingProfile] = useState<DriverProfile | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
 
@@ -308,10 +310,11 @@ export default function ProfilePickerScreen() {
   const handleUnlock = useCallback(
     async (profile: DriverProfile) => {
       await switchToProfile(profile);
+      resetTimeout();
       setUnlockingProfile(null);
       router.replace("/(tabs)");
     },
-    [switchToProfile, router]
+    [switchToProfile, router, resetTimeout]
   );
 
   const handleCancelPin = useCallback(() => {
@@ -325,6 +328,7 @@ export default function ProfilePickerScreen() {
         setIsAuthenticating(true);
         try {
           await switchToProfile(profile);
+          resetTimeout();
           router.replace("/(tabs)");
         } catch (e: any) {
           Alert.alert("Error", e.message || "Failed to switch profile");
@@ -345,6 +349,7 @@ export default function ProfilePickerScreen() {
           if (success) {
             try {
               await switchToProfile(profile);
+              resetTimeout();
               router.replace("/(tabs)");
             } catch (e: any) {
               Alert.alert("Error", e.message || "Failed to switch profile");
@@ -366,7 +371,7 @@ export default function ProfilePickerScreen() {
         setUnlockingProfile(profile);
       }
     },
-    [switchToProfile, router]
+    [switchToProfile, router, resetTimeout]
   );
 
   const handleAddProfile = useCallback(() => {

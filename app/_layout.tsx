@@ -1,8 +1,8 @@
 import "@/global.css";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack, useRouter, useSegments } from "expo-router";
+import { Stack, useRouter, useSegments, usePathname } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
 import { Platform, ActivityIndicator, View } from "react-native";
@@ -44,6 +44,14 @@ function AppNavigator() {
   const { isTimedOut, resetTimeout, recordActivity } = useSessionTimeout();
   const router = useRouter();
   const segments = useSegments();
+  const pathname = usePathname();
+
+  // Global activity tracker: any navigation change = user is active
+  useEffect(() => {
+    if (pathname) {
+      recordActivity();
+    }
+  }, [pathname, recordActivity]);
 
   // Start/stop assignment polling based on auth state
   useEffect(() => {
@@ -77,8 +85,10 @@ function AppNavigator() {
 
   // Navigation guard: redirect to profile-picker when session times out
   // Only redirect if the user is currently on a protected route
+  // Uses a ref to prevent the guard from firing multiple times
+  const isSigningOutRef = useRef(false);
   useEffect(() => {
-    if (isTimedOut && auth?.isLoggedIn && activeProfile) {
+    if (isTimedOut && auth?.isLoggedIn && activeProfile && !isSigningOutRef.current) {
       // Check if user is on a protected route (tabs, leg, run-sheet, etc.)
       const firstSegment = segments[0];
       const isOnProtectedRoute =
@@ -89,8 +99,11 @@ function AppNavigator() {
         firstSegment === "barcode-scanner";
 
       if (isOnProtectedRoute) {
+        isSigningOutRef.current = true;
         signOut().then(() => {
           router.replace("/profile-picker");
+          // Reset after a delay to allow re-login
+          setTimeout(() => { isSigningOutRef.current = false; }, 1000);
         });
       }
     }
