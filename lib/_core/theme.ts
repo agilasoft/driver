@@ -32,7 +32,6 @@ type RuntimePalette = SchemePaletteItem & {
   text: string;
   background: string;
   tint: string;
-  accent: string;
   icon: string;
   tabIconDefault: string;
   tabIconSelected: string;
@@ -46,7 +45,6 @@ function buildRuntimePalette(scheme: ColorScheme): RuntimePalette {
     text: base.foreground,
     background: base.background,
     tint: base.primary,
-    accent: base.accent,
     icon: base.muted,
     tabIconDefault: base.muted,
     tabIconSelected: base.primary,

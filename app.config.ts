@@ -32,7 +32,7 @@ const env = {
   appSlug: "driver",
   // S3 URL of the app logo - set this to the URL returned by generate_image when creating custom logo
   // Leave empty to use the default icon from assets/images/icon.png
-  logoUrl: "https://d2xsxph8kpxj0f.cloudfront.net/310519663642779290/fuZ7KuR7NWQGfHWUDwE6wy/driver-icon-rounded-FAWX9qT52xfmXnZTw6h8SG.png",
+  logoUrl: "",
   scheme: schemeFromBundleId,
   iosBundleId: bundleId,
   androidPackage: bundleId,
@@ -56,7 +56,7 @@ const config: ExpoConfig = {
   },
   android: {
     adaptiveIcon: {
-      backgroundColor: "#1B3A5C",
+      backgroundColor: "#E6F4FE",
       foregroundImage: "./assets/images/android-icon-foreground.png",
       backgroundImage: "./assets/images/android-icon-background.png",
       monochromeImage: "./assets/images/android-icon-monochrome.png",
@@ -64,7 +64,7 @@ const config: ExpoConfig = {
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
     package: env.androidPackage,
-    permissions: ["POST_NOTIFICATIONS", "CAMERA", "READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE", "ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"],
+    permissions: ["POST_NOTIFICATIONS"],
     intentFilters: [
       {
         action: "VIEW",
@@ -109,18 +109,6 @@ const config: ExpoConfig = {
         dark: {
           backgroundColor: "#000000",
         },
-      },
-    ],
-    [
-      "expo-location",
-      {
-        locationWhenInUsePermission: "Allow $(PRODUCT_NAME) to capture your location for proof of delivery.",
-      },
-    ],
-    [
-      "expo-local-authentication",
-      {
-        faceIDPermission: "Allow $(PRODUCT_NAME) to use Face ID to unlock your driver profile.",
       },
     ],
     [
