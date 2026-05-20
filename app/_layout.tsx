@@ -84,7 +84,7 @@ function AppNavigator() {
     }
   }, [isTimedOut, auth?.isLoggedIn, activeProfile, signOut, router]);
 
-  // Session timeout guard handles redirect; routes are always registered
+  const isUnlocked = auth?.isLoggedIn && activeProfile && !isTimedOut;
 
   if (isLoading) {
     return (
@@ -104,12 +104,15 @@ function AppNavigator() {
         <Stack.Screen name="config-scanner" options={{ presentation: "modal", headerShown: true }} />
         <Stack.Screen name="edit-profile" options={{ presentation: "fullScreenModal", headerShown: false }} />
         <Stack.Screen name="oauth/callback" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="run-sheet/[id]" options={{ headerShown: true }} />
-        <Stack.Screen name="leg/[legId]" options={{ headerShown: true }} />
-        <Stack.Screen name="signature-modal" options={{ presentation: "modal", headerShown: true }} />
-        <Stack.Screen name="barcode-scanner" options={{ presentation: "modal", headerShown: true }} />
-        <Stack.Screen name="+not-found" />
+        {isUnlocked ? (
+          <>
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="run-sheet/[id]" options={{ headerShown: true }} />
+            <Stack.Screen name="leg/[legId]" options={{ headerShown: true }} />
+            <Stack.Screen name="signature-modal" options={{ presentation: "modal", headerShown: true }} />
+            <Stack.Screen name="barcode-scanner" options={{ presentation: "modal", headerShown: true }} />
+          </>
+        ) : null}
       </Stack>
       <StatusBar style="auto" />
     </>

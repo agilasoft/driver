@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, memo } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   StyleSheet,
   Platform,
+  Pressable,
   TouchableOpacity,
   Animated,
   LayoutAnimation,
@@ -41,118 +42,7 @@ const BORDER = "#E5E5EA";
 const SURFACE = "#F5F5F7";
 const DELETE_RED = "#FF3B30";
 
-// ─── PIN Entry Component (memoized to prevent re-renders from parent) ────────
-
-interface PinEntryProps {
-  profile: DriverProfile;
-  onUnlock: (profile: DriverProfile) => Promise<void>;
-  onCancel: () => void;
-}
-
-const PinEntry = memo(function PinEntry({ profile, onUnlock, onCancel }: PinEntryProps) {
-  const insets = useSafeAreaInsets();
-  const [pinInput, setPinInput] = useState("");
-  const [pinError, setPinError] = useState("");
-  const [isAuthenticating, setIsAuthenticating] = useState(false);
-  const inputRef = useRef<TextInput>(null);
-
-  // Auto-focus the input on mount
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      inputRef.current?.focus();
-    }, 100);
-    return () => clearTimeout(timer);
-  }, []);
-
-  const handlePinSubmit = useCallback(async () => {
-    if (!profile.pin) return;
-    if (verifyPin(pinInput, profile.pin)) {
-      setIsAuthenticating(true);
-      try {
-        await onUnlock(profile);
-      } catch (e: any) {
-        Alert.alert("Error", e.message || "Failed to switch profile");
-        setIsAuthenticating(false);
-      }
-    } else {
-      setPinError("Incorrect PIN. Please try again.");
-      setPinInput("");
-    }
-  }, [pinInput, profile, onUnlock]);
-
-  const getInitials = (name: string) =>
-    (name || "?").split(" ").map((w) => w[0]).join("").toUpperCase().substring(0, 2);
-
-  return (
-    <ScreenContainer edges={["bottom", "left", "right"]} className="flex-1">
-      <View style={st.pinOverlay}>
-        <LinearGradient
-          colors={[BLUE, BLUE_LIGHT]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-          style={[st.pinGradientHeader, { paddingTop: insets.top + 8 }]}
-        >
-          <TouchableOpacity
-            style={st.pinBackBtn}
-            onPress={onCancel}
-            activeOpacity={0.7}
-          >
-            <MaterialIcons name="arrow-back" size={22} color="#fff" />
-          </TouchableOpacity>
-          <Text style={st.pinHeaderTitle}>Unlock Profile</Text>
-          <View style={{ width: 40 }} />
-        </LinearGradient>
-
-        <View style={st.pinContent}>
-          <View style={[st.pinAvatar, { backgroundColor: profile.avatarColor }]}>
-            <Text style={st.pinAvatarText}>
-              {getInitials(profile.fullName || "?")}
-            </Text>
-          </View>
-          <Text style={st.pinTitle}>
-            {profile.fullName || profile.userName}
-          </Text>
-          <Text style={st.pinSubtitle}>Enter your PIN to unlock</Text>
-
-          <TextInput
-            ref={inputRef}
-            style={[st.pinInput, { borderColor: pinError ? "#FF3B30" : BORDER }]}
-            value={pinInput}
-            onChangeText={(text) => {
-              setPinInput(text.replace(/[^0-9]/g, ""));
-              if (pinError) setPinError("");
-            }}
-            placeholder="- - - - - -"
-            placeholderTextColor="#C7C7CC"
-            keyboardType="number-pad"
-            secureTextEntry
-            maxLength={6}
-            returnKeyType="done"
-            onSubmitEditing={handlePinSubmit}
-          />
-
-          {pinError ? <Text style={st.pinErrorText}>{pinError}</Text> : null}
-
-          <TouchableOpacity
-            style={[st.pinUnlockBtn, (!pinInput || isAuthenticating) && { opacity: 0.6 }]}
-            onPress={handlePinSubmit}
-            activeOpacity={0.8}
-            disabled={!pinInput || isAuthenticating}
-          >
-            {isAuthenticating ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={st.pinUnlockText}>Unlock</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
-    </ScreenContainer>
-  );
-});
-
-// ─── Swipeable Profile Card ─────────────────────────────────────────────────
-
+// Swipeable profile card component
 function SwipeableProfileCard({
   item,
   onTap,
@@ -168,7 +58,7 @@ function SwipeableProfileCard({
   const isSwiped = useRef(false);
   const startX = useRef(0);
   const currentX = useRef(0);
-  const ACTION_WIDTH = 140;
+  const ACTION_WIDTH = 140; // width for both edit + delete buttons
 
   const getInitials = (name: string) =>
     (name || "?").split(" ").map((w) => w[0]).join("").toUpperCase().substring(0, 2);
@@ -216,6 +106,7 @@ function SwipeableProfileCard({
     const dx = e.nativeEvent.pageX - startX.current;
     const finalX = currentX.current + dx;
 
+    // If barely moved, treat as tap
     if (Math.abs(dx) < 10) {
       if (isSwiped.current) {
         resetSwipe();
@@ -225,6 +116,7 @@ function SwipeableProfileCard({
       return;
     }
 
+    // Determine if we should open or close
     if (finalX < -ACTION_WIDTH / 2) {
       openSwipe();
     } else {
@@ -234,10 +126,14 @@ function SwipeableProfileCard({
 
   return (
     <View style={st.swipeContainer}>
+      {/* Background action buttons */}
       <View style={st.actionsContainer}>
         <TouchableOpacity
           style={st.editAction}
-          onPress={() => { resetSwipe(); onEdit(); }}
+          onPress={() => {
+            resetSwipe();
+            onEdit();
+          }}
           activeOpacity={0.8}
         >
           <MaterialIcons name="edit" size={20} color="#fff" />
@@ -245,7 +141,10 @@ function SwipeableProfileCard({
         </TouchableOpacity>
         <TouchableOpacity
           style={st.deleteAction}
-          onPress={() => { resetSwipe(); onDelete(); }}
+          onPress={() => {
+            resetSwipe();
+            onDelete();
+          }}
           activeOpacity={0.8}
         >
           <MaterialIcons name="delete" size={20} color="#fff" />
@@ -253,15 +152,22 @@ function SwipeableProfileCard({
         </TouchableOpacity>
       </View>
 
+      {/* Foreground card */}
       <Animated.View
-        style={[st.profileCard, { transform: [{ translateX }] }]}
+        style={[
+          st.profileCard,
+          { transform: [{ translateX }] },
+        ]}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
+        {/* Avatar */}
         <View style={[st.avatar, { backgroundColor: item.avatarColor }]}>
           <Text style={st.avatarText}>{initials}</Text>
         </View>
+
+        {/* Profile Info */}
         <View style={st.profileInfo}>
           <Text style={st.profileName} numberOfLines={1}>
             {item.fullName || item.userName || "Unknown User"}
@@ -277,6 +183,8 @@ function SwipeableProfileCard({
             </View>
           ) : null}
         </View>
+
+        {/* Security indicator */}
         {hasLock ? (
           <View style={st.lockBadge}>
             <MaterialIcons
@@ -292,31 +200,18 @@ function SwipeableProfileCard({
   );
 }
 
-// ─── Main Screen ────────────────────────────────────────────────────────────
-
 export default function ProfilePickerScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { profiles, switchToProfile, removeProfile, loadProfiles, isLoading } = useAuth();
   const [unlockingProfile, setUnlockingProfile] = useState<DriverProfile | null>(null);
+  const [pinInput, setPinInput] = useState("");
+  const [pinError, setPinError] = useState("");
   const [isAuthenticating, setIsAuthenticating] = useState(false);
 
   useEffect(() => {
     loadProfiles();
   }, [loadProfiles]);
-
-  const handleUnlock = useCallback(
-    async (profile: DriverProfile) => {
-      await switchToProfile(profile);
-      setUnlockingProfile(null);
-      router.replace("/(tabs)");
-    },
-    [switchToProfile, router]
-  );
-
-  const handleCancelPin = useCallback(() => {
-    setUnlockingProfile(null);
-  }, []);
 
   const handleProfileTap = useCallback(
     async (profile: DriverProfile) => {
@@ -364,10 +259,32 @@ export default function ProfilePickerScreen() {
       // Show PIN entry
       if (profile.pin) {
         setUnlockingProfile(profile);
+        setPinInput("");
+        setPinError("");
       }
     },
     [switchToProfile, router]
   );
+
+  const handlePinSubmit = useCallback(async () => {
+    if (!unlockingProfile || !unlockingProfile.pin) return;
+    if (verifyPin(pinInput, unlockingProfile.pin)) {
+      setIsAuthenticating(true);
+      try {
+        await switchToProfile(unlockingProfile);
+        setUnlockingProfile(null);
+        setPinInput("");
+        router.replace("/(tabs)");
+      } catch (e: any) {
+        Alert.alert("Error", e.message || "Failed to switch profile");
+      } finally {
+        setIsAuthenticating(false);
+      }
+    } else {
+      setPinError("Incorrect PIN. Please try again.");
+      setPinInput("");
+    }
+  }, [unlockingProfile, pinInput, switchToProfile, router]);
 
   const handleAddProfile = useCallback(() => {
     router.push("/login");
@@ -413,14 +330,79 @@ export default function ProfilePickerScreen() {
     [handleProfileTap, handleEditProfile, handleDeleteProfile]
   );
 
-  // Show PIN entry as a completely separate component tree
+  // PIN entry overlay
   if (unlockingProfile) {
+    const getInitials = (name: string) =>
+      (name || "?").split(" ").map((w) => w[0]).join("").toUpperCase().substring(0, 2);
+
     return (
-      <PinEntry
-        profile={unlockingProfile}
-        onUnlock={handleUnlock}
-        onCancel={handleCancelPin}
-      />
+      <ScreenContainer edges={["bottom", "left", "right"]} className="flex-1">
+        <View style={st.pinOverlay}>
+          <LinearGradient
+            colors={[BLUE, BLUE_LIGHT]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={[st.pinGradientHeader, { paddingTop: insets.top + 8 }]}
+          >
+            <TouchableOpacity
+              style={st.pinBackBtn}
+              onPress={() => {
+                setUnlockingProfile(null);
+                setPinInput("");
+                setPinError("");
+              }}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="arrow-back" size={22} color="#fff" />
+            </TouchableOpacity>
+            <Text style={st.pinHeaderTitle}>Unlock Profile</Text>
+            <View style={{ width: 40 }} />
+          </LinearGradient>
+
+          <View style={st.pinContent}>
+            <View style={[st.pinAvatar, { backgroundColor: unlockingProfile.avatarColor }]}>
+              <Text style={st.pinAvatarText}>
+                {getInitials(unlockingProfile.fullName || "?")}
+              </Text>
+            </View>
+            <Text style={st.pinTitle}>
+              {unlockingProfile.fullName || unlockingProfile.userName}
+            </Text>
+            <Text style={st.pinSubtitle}>Enter your PIN to unlock</Text>
+
+            <TextInput
+              style={[st.pinInput, { borderColor: pinError ? "#FF3B30" : BORDER }]}
+              value={pinInput}
+              onChangeText={(text) => {
+                setPinInput(text.replace(/[^0-9]/g, ""));
+                setPinError("");
+              }}
+              placeholder="- - - - - -"
+              placeholderTextColor="#C7C7CC"
+              keyboardType="number-pad"
+              secureTextEntry
+              maxLength={6}
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={handlePinSubmit}
+            />
+
+            {pinError ? <Text style={st.pinErrorText}>{pinError}</Text> : null}
+
+            <TouchableOpacity
+              style={st.pinUnlockBtn}
+              onPress={handlePinSubmit}
+              activeOpacity={0.8}
+            >
+              {isAuthenticating ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={st.pinUnlockText}>Unlock</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </ScreenContainer>
     );
   }
 
@@ -437,7 +419,7 @@ export default function ProfilePickerScreen() {
   return (
     <ScreenContainer edges={["bottom", "left", "right"]} className="flex-1">
       <View style={st.container}>
-        {/* Blue gradient header */}
+        {/* Blue gradient header — matches CargoNext */}
         <LinearGradient
           colors={[BLUE, BLUE_LIGHT]}
           start={{ x: 0, y: 0 }}
@@ -625,7 +607,7 @@ const st = StyleSheet.create({
   pinOverlay: { flex: 1, backgroundColor: "#FFFFFF" },
   pinGradientHeader: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingBottom: 16, paddingHorizontal: 16,
+    paddingTop: 8, paddingBottom: 16, paddingHorizontal: 16,
   },
   pinBackBtn: {
     width: 40, height: 40, borderRadius: 20,

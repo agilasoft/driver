@@ -1,7 +1,6 @@
 import { useState, useCallback } from "react";
 import { Platform, Alert } from "react-native";
 import * as Location from "expo-location";
-import { ensureLocationReady, checkLocationServices } from "@/lib/location-permission";
 
 export interface GpsCoords {
   latitude: number;
@@ -11,7 +10,7 @@ export interface GpsCoords {
 
 /**
  * Hook that provides a function to capture the current GPS location.
- * Uses centralized permission management to avoid repeated permission prompts.
+ * Handles permission requests and error states.
  */
 export function useLocationCapture() {
   const [isCapturing, setIsCapturing] = useState(false);
@@ -41,7 +40,7 @@ export function useLocationCapture() {
     setIsCapturing(true);
     try {
       // Check if location services are enabled
-      const servicesEnabled = await checkLocationServices();
+      const servicesEnabled = await Location.hasServicesEnabledAsync();
       if (!servicesEnabled) {
         Alert.alert(
           "Location Services Disabled",
@@ -50,9 +49,9 @@ export function useLocationCapture() {
         return null;
       }
 
-      // Use centralized permission request (won't re-prompt if already granted)
-      const ready = await ensureLocationReady();
-      if (!ready) {
+      // Request permission
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
         Alert.alert(
           "Location Permission Denied",
           "Location permission is needed to record GPS coordinates for proof of delivery."
