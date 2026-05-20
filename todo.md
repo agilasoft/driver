@@ -101,3 +101,4 @@
 - [x] Feature: Add "Complete Job" button on Current Job screen when all legs are done
 - [x] Feature: Removed 1-minute session timeout option to prevent navigation issues
 - [x] Fix: Reverted to working version (92e3ee00) — removed +native-intent.tsx and +not-found.tsx that were breaking route navigation
+- [x] Fix: Unmatched Route on Android launch — added +not-found.tsx redirect to / AND removed conditional route mounting (all routes always registered in Stack)
