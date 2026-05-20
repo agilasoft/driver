@@ -32,3 +32,4 @@
 - [x] App icon (steering wheel on blue background)
 - [ ] Unit tests for offline store and API
 - [x] Fix: Add missing expo-location and expo-local-authentication to package.json (build failure)
+- [x] Fix: 'undefined is not a function' error when saving profile (changed dynamic import to static import for expo-local-authentication)

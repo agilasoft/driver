@@ -1,13 +1,18 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
+import * as LocalAuth from "expo-local-authentication";
 import type { DriverProfile } from "./types";
 
 const PROFILES_KEY = "driver_profiles";
 const AVATAR_COLORS = ["#3478C6", "#F27A2E", "#34C759", "#FF3B30", "#AF52DE", "#FF9500", "#5856D6", "#FF2D55"];
 
 export async function getProfiles(): Promise<DriverProfile[]> {
-  const raw = await AsyncStorage.getItem(PROFILES_KEY);
-  return raw ? JSON.parse(raw) : [];
+  try {
+    const raw = await AsyncStorage.getItem(PROFILES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
 }
 
 export async function saveProfiles(profiles: DriverProfile[]): Promise<void> {
@@ -44,7 +49,6 @@ export async function removeProfile(id: string): Promise<void> {
 export async function checkBiometricAvailability(): Promise<boolean> {
   if (Platform.OS === "web") return false;
   try {
-    const LocalAuth = await import("expo-local-authentication");
     const hasHardware = await LocalAuth.hasHardwareAsync();
     const isEnrolled = await LocalAuth.isEnrolledAsync();
     return hasHardware && isEnrolled;
@@ -54,7 +58,6 @@ export async function checkBiometricAvailability(): Promise<boolean> {
 export async function authenticateWithBiometric(): Promise<boolean> {
   if (Platform.OS === "web") return false;
   try {
-    const LocalAuth = await import("expo-local-authentication");
     const result = await LocalAuth.authenticateAsync({ promptMessage: "Unlock Driver Profile", cancelLabel: "Use PIN" });
     return result.success;
   } catch { return false; }

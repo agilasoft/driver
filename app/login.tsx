@@ -28,7 +28,15 @@ export default function LoginScreen() {
       const url = siteUrl.trim().replace(/\/+$/, "");
       configureFrappeApi(url, apiKey.trim(), apiSecret.trim());
       const { userName, fullName } = await testConnection();
-      const { driverName, driverId } = await getLinkedDriver(userName);
+      let driverName = "";
+      let driverId = "";
+      try {
+        const linked = await getLinkedDriver(userName);
+        driverName = linked.driverName || "";
+        driverId = linked.driverId || "";
+      } catch {
+        // No linked driver is OK - user can still save profile
+      }
       setTestResult({ userName, fullName, driverName, driverId });
       setStep(2);
     } catch (err: any) {
@@ -40,19 +48,23 @@ export default function LoginScreen() {
     if (!testResult) return;
     setLoading(true);
     try {
-      await addProfile({
+      const profileData = {
         siteUrl: siteUrl.trim().replace(/\/+$/, ""),
         apiKey: apiKey.trim(),
         apiSecret: apiSecret.trim(),
         userName: testResult.userName,
         fullName: testResult.fullName,
-        driverName: testResult.driverName,
-        driverId: testResult.driverId,
-      });
-      await reloadProfiles();
+        driverName: testResult.driverName || "",
+        driverId: testResult.driverId || "",
+      };
+      await addProfile(profileData);
+      if (reloadProfiles) {
+        await reloadProfiles();
+      }
       router.back();
     } catch (err: any) {
-      Alert.alert("Error", err.message || "Failed to save profile.");
+      const msg = err && typeof err === "object" && "message" in err ? err.message : String(err);
+      Alert.alert("Error", msg || "Failed to save profile.");
     } finally { setLoading(false); }
   };
 
