@@ -11,6 +11,7 @@ import {
   Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { ScreenContainer } from "@/components/screen-container";
 import { ConnectivityBanner } from "@/components/connectivity-banner";
@@ -41,6 +42,7 @@ interface LegProgress {
 
 export default function RunSheetsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { isOnline } = useSync();
   const { auth } = useAuth();
   const { currentJobId, setCurrentJob } = useCurrentJob();
@@ -226,9 +228,9 @@ export default function RunSheetsScreen() {
   };
 
   return (
-    <ScreenContainer containerClassName="bg-white">
+    <ScreenContainer edges={["bottom", "left", "right"]} containerClassName="bg-white">
       {/* Header */}
-      <LinearGradient colors={[BLUE, BLUE_LIGHT]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={st.header}>
+      <LinearGradient colors={[BLUE, BLUE_LIGHT]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={[st.header, { paddingTop: insets.top + 8 }]}>
         <View style={st.headerRow}>
           <Text style={st.headerTitle}>Run Sheets</Text>
           {!isOnline && (

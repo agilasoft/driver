@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { ScreenContainer } from "@/components/screen-container";
 import { ConnectivityBanner } from "@/components/connectivity-banner";
@@ -27,7 +28,10 @@ import {
   refreshBundle,
   addPendingChange,
   applyLocalChange,
+  addPendingStatusChange,
+  applyLocalStatusChange,
 } from "@/lib/offline-store";
+import { updateRunSheetStatus } from "@/lib/frappe-api";
 import { LinearGradient } from "expo-linear-gradient";
 
 const BLUE = "#3478C6";
@@ -41,7 +45,8 @@ const FG = "#1A1A1A";
 
 export default function CurrentJobScreen() {
   const router = useRouter();
-  const { isOnline } = useSync();
+  const insets = useSafeAreaInsets();
+  const { isOnline, refreshPendingCount } = useSync();
   const { auth, activeProfile } = useAuth();
   const { currentJobId } = useCurrentJob();
   const { isEnabled: liveLocEnabled, isTracking } = useLiveLocation();
@@ -114,6 +119,35 @@ export default function CurrentJobScreen() {
 
   const nextLeg = getNextLeg();
 
+  const handleCompleteJob = () => {
+    if (!currentJobId || !bundle) return;
+    Alert.alert("Complete Job", "Mark this run sheet as Completed?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Complete",
+        onPress: async () => {
+          try {
+            if (isOnline) {
+              await updateRunSheetStatus(currentJobId, "Completed");
+              await loadData(true);
+              Alert.alert("Success", "Job marked as Completed.");
+            } else {
+              const change = { runSheetName: currentJobId, status: "Completed", timestamp: new Date().toISOString() };
+              await addPendingStatusChange(change);
+              await applyLocalStatusChange(currentJobId, "Completed");
+              await refreshPendingCount();
+              const updatedBundle = await getCachedBundle(currentJobId);
+              if (updatedBundle) setBundle(updatedBundle);
+              Alert.alert("Queued", "Completion will sync when online.");
+            }
+          } catch (error: any) {
+            Alert.alert("Error", error.message || "Failed to complete job.");
+          }
+        },
+      },
+    ]);
+  };
+
   const renderLegItem = ({ item, index }: { item: TransportLeg; index: number }) => {
     const hasPickData = !!item.pick_signature || !!item.start_date;
     const hasDropData = !!item.drop_signature || !!item.end_date;
@@ -180,8 +214,8 @@ export default function CurrentJobScreen() {
   // No current job selected
   if (!currentJobId) {
     return (
-      <ScreenContainer containerClassName="bg-white">
-        <LinearGradient colors={[BLUE, BLUE_LIGHT]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={st.header}>
+      <ScreenContainer edges={["bottom", "left", "right"]} containerClassName="bg-white">
+        <LinearGradient colors={[BLUE, BLUE_LIGHT]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={[st.header, { paddingTop: insets.top + 8 }]}>
           <Text style={st.headerTitle}>Current Job</Text>
           {auth?.driverName ? <Text style={st.headerSubtitle}>{auth.driverName}</Text> : null}
         </LinearGradient>
@@ -208,8 +242,8 @@ export default function CurrentJobScreen() {
 
   if (isLoading) {
     return (
-      <ScreenContainer containerClassName="bg-white">
-        <LinearGradient colors={[BLUE, BLUE_LIGHT]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={st.header}>
+      <ScreenContainer edges={["bottom", "left", "right"]} containerClassName="bg-white">
+        <LinearGradient colors={[BLUE, BLUE_LIGHT]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={[st.header, { paddingTop: insets.top + 8 }]}>
           <Text style={st.headerTitle}>Current Job</Text>
         </LinearGradient>
         <View style={st.loadingContainer}>
@@ -221,9 +255,9 @@ export default function CurrentJobScreen() {
   }
 
   return (
-    <ScreenContainer containerClassName="bg-white">
+    <ScreenContainer edges={["bottom", "left", "right"]} containerClassName="bg-white">
       {/* Header */}
-      <LinearGradient colors={[BLUE, BLUE_LIGHT]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={st.header}>
+      <LinearGradient colors={[BLUE, BLUE_LIGHT]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={[st.header, { paddingTop: insets.top + 8 }]}>
         <View style={st.headerRow}>
           <View style={{ flex: 1 }}>
             <Text style={st.headerTitle}>Current Job</Text>
@@ -300,6 +334,16 @@ export default function CurrentJobScreen() {
           <MaterialIcons name="check-circle" size={40} color={GREEN} />
           <Text style={st.allDoneTitle}>All Legs Completed!</Text>
           <Text style={st.allDoneSub}>Great job. All {totalLegs} stops have been finalized.</Text>
+          {bundle?.doc.status === "In-Progress" && (
+            <TouchableOpacity
+              style={st.completeJobBtn}
+              onPress={handleCompleteJob}
+              activeOpacity={0.8}
+            >
+              <MaterialIcons name="check-circle" size={20} color="#fff" />
+              <Text style={st.completeJobBtnText}>Complete Job</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
 
@@ -610,5 +654,23 @@ const st = StyleSheet.create({
     fontSize: 14,
     color: GRAY,
     marginTop: 12,
+  },
+
+  // Complete Job button
+  completeJobBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: GREEN,
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginTop: 16,
+  },
+  completeJobBtnText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700",
   },
 });

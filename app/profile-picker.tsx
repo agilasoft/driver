@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, memo } from "react";
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import {
   LayoutAnimation,
   UIManager,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
@@ -334,13 +335,13 @@ export default function ProfilePickerScreen() {
       (name || "?").split(" ").map((w) => w[0]).join("").toUpperCase().substring(0, 2);
 
     return (
-      <ScreenContainer edges={["top", "bottom", "left", "right"]} className="flex-1">
+      <ScreenContainer edges={["bottom", "left", "right"]} className="flex-1">
         <View style={st.pinOverlay}>
           <LinearGradient
             colors={[BLUE, BLUE_LIGHT]}
             start={{ x: 0, y: 0 }}
             end={{ x: 0, y: 1 }}
-            style={st.pinGradientHeader}
+            style={[st.pinGradientHeader, { paddingTop: useSafeAreaInsets().top + 8 }]}
           >
             <TouchableOpacity
               style={st.pinBackBtn}
@@ -415,14 +416,14 @@ export default function ProfilePickerScreen() {
   }
 
   return (
-    <ScreenContainer edges={["top", "bottom", "left", "right"]} className="flex-1">
+    <ScreenContainer edges={["bottom", "left", "right"]} className="flex-1">
       <View style={st.container}>
-        {/* Blue gradient header — matches CargoNext */}
+        {/* Blue gradient header — extends to top edge behind status bar */}
         <LinearGradient
           colors={[BLUE, BLUE_LIGHT]}
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
-          style={st.header}
+          style={[st.header, { paddingTop: useSafeAreaInsets().top + 12 }]}
         >
           <View style={st.headerLogoBox}>
             <Image

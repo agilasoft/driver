@@ -90,3 +90,7 @@
 - [x] Add Run Sheets as second tab where driver can select and make a run sheet the current job
 - [x] Simplify UI for drivers: larger touch targets, clearer flow, minimal clutter
 - [x] Add "current job" state management (persist selected run sheet as active job)
+- [x] Fix: "Unmatched Route" error on Android launch — rewrite root _layout.tsx to always register all routes with redirect-based auth guard instead of conditional mounting
+- [x] Add +not-found.tsx catch-all that redirects to profile-picker for any unresolved deep link
+- [x] Fix: Header gradient not extending behind status bar — use useSafeAreaInsets and remove top edge from ScreenContainer on gradient screens
+- [x] Add "Complete Job" button on Current Job tab when all legs are done and run sheet is In-Progress

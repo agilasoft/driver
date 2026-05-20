@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import * as Notifications from "expo-notifications";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScreenContainer } from "@/components/screen-container";
 import { useAuth } from "@/lib/auth-context";
 import { useSync } from "@/lib/sync-context";
@@ -41,6 +42,7 @@ const SURFACE = "#F5F5F7";
 const FG = "#1A1A1A";
 
 export default function SettingsScreen() {
+  const insets = useSafeAreaInsets();
   const {
     auth, logout, updateCredentials, signOut,
     activeProfile, profiles,
@@ -258,13 +260,13 @@ export default function SettingsScreen() {
   const hasBio = !!activeProfile?.useBiometric;
 
   return (
-    <ScreenContainer containerClassName="bg-white">
+    <ScreenContainer edges={["bottom", "left", "right"]} containerClassName="bg-white">
       {/* Blue gradient header */}
       <LinearGradient
         colors={[BLUE, BLUE_LIGHT]}
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
-        style={st.gradientHeader}
+        style={[st.gradientHeader, { paddingTop: insets.top + 8 }]}
       >
         <Text style={st.headerTitle}>Settings</Text>
         {auth?.driverName ? (
