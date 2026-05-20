@@ -1,0 +1,33 @@
+# Driver App TODO
+
+- [x] Core types (TransportLeg, RunSheet, RunSheetBundle, Profile, AuthState)
+- [x] Frappe API client (auth, fetch run sheets, update legs, upload files, update status)
+- [x] Offline store (cache run sheets/bundles, pending changes queue, pending status changes)
+- [x] Auth context (multi-profile, PIN, biometric, active profile state)
+- [x] Profile manager (AsyncStorage CRUD for profiles)
+- [x] Sync context (connectivity detection, auto-sync, pending count)
+- [x] Current job context (persist selected run sheet)
+- [x] Session timeout provider
+- [x] Live location provider
+- [x] Geofence provider
+- [x] Shift log provider
+- [x] Root _layout.tsx with ALL routes always registered (flat Stack, no conditional mounting)
+- [x] app/index.tsx entry redirect (check auth → profile-picker or tabs)
+- [x] Profile picker screen (blue gradient header, profile cards, orange FAB)
+- [x] Login screen (add/edit profile with Frappe credentials)
+- [x] Tab layout (Current Job, Run Sheets, Settings)
+- [x] Current Job tab (progress, next stop, leg list, complete job button)
+- [x] Run Sheets tab (list with search, date filter, set current job)
+- [x] Settings tab (profile mgmt, session timeout, live location, geofence, sync, logout)
+- [x] Run Sheet Detail screen (status transitions, leg cards, navigate buttons)
+- [x] Leg Detail screen (pick/drop: timestamp, GPS, signature, notes, photo, barcode)
+- [x] Signature modal (gesture-based drawing canvas)
+- [x] Barcode scanner screen
+- [x] GPS location capture hook
+- [x] Geocoding utility (resolve addresses to coordinates)
+- [ ] PDF generator for run sheet summary
+- [x] Connectivity banner component
+- [x] Status badge component
+- [x] CargoNext branding (blue/orange theme, gradient headers)
+- [x] App icon (steering wheel on blue background)
+- [ ] Unit tests for offline store and API
