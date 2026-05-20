@@ -102,3 +102,5 @@
 - [x] Update: Check Transport Leg doctype for field changes and update app accordingly
 - [x] Fix: Leg navigation still broken — removed +native-intent.tsx, disabled session timeout guard, switched to string-based href navigation, registered all routes in Stack
 - [x] Fix: Leg detail screen says "leg not found" when clicking a leg — added currentJobId fallback and search all cached bundles
+- [x] Feature: Add "Complete All" button on Current Job screen when all legs are done to mark run sheet as Completed
+- [x] Feature: Remove/disable session timeout to prevent navigation issues for drivers
