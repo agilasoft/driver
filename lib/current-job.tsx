@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useAuth } from "@/lib/auth-context";
+import { getActiveProfileId } from "@/lib/profile-manager";
 
 interface CurrentJobContextType {
   currentJobId: string | null;
@@ -24,76 +24,52 @@ function getStorageKey(profileId: string) {
   return `current_job_${profileId}`;
 }
 
-// Fallback key when no profile is active (e.g. single-profile mode)
-const FALLBACK_KEY = "current_job_default";
-
 export function CurrentJobProvider({ children }: { children: React.ReactNode }) {
-  const { activeProfile } = useAuth();
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const profileIdRef = useRef<string | null>(null);
 
-  // Derive the storage key from the active profile
-  const storageKey = activeProfile?.id
-    ? getStorageKey(activeProfile.id)
-    : FALLBACK_KEY;
-
-  // Reload current job whenever the active profile changes
+  // Load current job on mount
   useEffect(() => {
-    const newProfileId = activeProfile?.id ?? null;
-
-    // If profile changed, reload from storage
-    if (newProfileId !== profileIdRef.current) {
-      profileIdRef.current = newProfileId;
-      setIsLoading(true);
-      setCurrentJobId(null); // Clear while loading
-
-      const key = newProfileId ? getStorageKey(newProfileId) : FALLBACK_KEY;
-      AsyncStorage.getItem(key)
-        .then((stored) => {
+    (async () => {
+      try {
+        const profileId = await getActiveProfileId();
+        if (profileId) {
+          const stored = await AsyncStorage.getItem(getStorageKey(profileId));
           if (stored) {
             setCurrentJobId(stored);
           }
-        })
-        .catch(() => {
-          // ignore
-        })
-        .finally(() => {
-          setIsLoading(false);
-        });
-    } else if (isLoading && profileIdRef.current === null && !activeProfile) {
-      // No profile yet — still loading auth, keep waiting
-      // But set a timeout to avoid infinite loading
-      const timer = setTimeout(() => setIsLoading(false), 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [activeProfile]);
+        }
+      } catch {
+        // ignore
+      } finally {
+        setIsLoading(false);
+      }
+    })();
+  }, []);
 
   const setCurrentJob = useCallback(async (runSheetId: string) => {
-    const key = activeProfile?.id
-      ? getStorageKey(activeProfile.id)
-      : FALLBACK_KEY;
-
     try {
-      await AsyncStorage.setItem(key, runSheetId);
+      const profileId = await getActiveProfileId();
+      if (profileId) {
+        await AsyncStorage.setItem(getStorageKey(profileId), runSheetId);
+      }
+      setCurrentJobId(runSheetId);
     } catch {
-      // ignore storage error
+      // ignore
     }
-    setCurrentJobId(runSheetId);
-  }, [activeProfile?.id]);
+  }, []);
 
   const clearCurrentJob = useCallback(async () => {
-    const key = activeProfile?.id
-      ? getStorageKey(activeProfile.id)
-      : FALLBACK_KEY;
-
     try {
-      await AsyncStorage.removeItem(key);
+      const profileId = await getActiveProfileId();
+      if (profileId) {
+        await AsyncStorage.removeItem(getStorageKey(profileId));
+      }
+      setCurrentJobId(null);
     } catch {
-      // ignore storage error
+      // ignore
     }
-    setCurrentJobId(null);
-  }, [activeProfile?.id]);
+  }, []);
 
   return (
     <CurrentJobContext.Provider value={{ currentJobId, setCurrentJob, clearCurrentJob, isLoading }}>

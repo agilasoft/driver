@@ -28,7 +28,6 @@ import { useLiveLocation, INTERVAL_OPTIONS } from "@/lib/live-location";
 import { useGeofence, RADIUS_OPTIONS } from "@/lib/geofence";
 import { useShiftLog, formatDuration, formatDurationShort } from "@/lib/shift-log";
 import { LinearGradient } from "expo-linear-gradient";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const BLUE = "#3478C6";
 const BLUE_LIGHT = "#5B9BD5";
@@ -49,7 +48,6 @@ export default function SettingsScreen() {
   } = useAuth();
   const { isOnline, pendingCount, isSyncing, lastSync, syncNow } = useSync();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { themePreference, setThemePreference, colorScheme } = useThemeContext();
   const { timeoutMinutes, setTimeoutMinutes } = useSessionTimeout();
   const { isEnabled: liveLocEnabled, isTracking, lastUpdate, intervalMs, setEnabled: setLiveLocEnabled, setIntervalMs } = useLiveLocation();
@@ -260,13 +258,13 @@ export default function SettingsScreen() {
   const hasBio = !!activeProfile?.useBiometric;
 
   return (
-    <ScreenContainer edges={["left", "right"]} containerClassName="bg-white">
+    <ScreenContainer containerClassName="bg-white">
       {/* Blue gradient header */}
       <LinearGradient
         colors={[BLUE, BLUE_LIGHT]}
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
-        style={[st.gradientHeader, { paddingTop: insets.top + 8 }]}
+        style={st.gradientHeader}
       >
         <Text style={st.headerTitle}>Settings</Text>
         {auth?.driverName ? (

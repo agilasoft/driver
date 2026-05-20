@@ -29,7 +29,6 @@ import {
   applyLocalChange,
 } from "@/lib/offline-store";
 import { LinearGradient } from "expo-linear-gradient";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const BLUE = "#3478C6";
 const BLUE_LIGHT = "#5B9BD5";
@@ -42,7 +41,6 @@ const FG = "#1A1A1A";
 
 export default function CurrentJobScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { isOnline } = useSync();
   const { auth, activeProfile } = useAuth();
   const { currentJobId } = useCurrentJob();
@@ -182,8 +180,8 @@ export default function CurrentJobScreen() {
   // No current job selected
   if (!currentJobId) {
     return (
-      <ScreenContainer edges={["left", "right"]} containerClassName="bg-white">
-        <LinearGradient colors={[BLUE, BLUE_LIGHT]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={[st.header, { paddingTop: insets.top + 8 }]}>
+      <ScreenContainer containerClassName="bg-white">
+        <LinearGradient colors={[BLUE, BLUE_LIGHT]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={st.header}>
           <Text style={st.headerTitle}>Current Job</Text>
           {auth?.driverName ? <Text style={st.headerSubtitle}>{auth.driverName}</Text> : null}
         </LinearGradient>
@@ -210,8 +208,8 @@ export default function CurrentJobScreen() {
 
   if (isLoading) {
     return (
-      <ScreenContainer edges={["left", "right"]} containerClassName="bg-white">
-        <LinearGradient colors={[BLUE, BLUE_LIGHT]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={[st.header, { paddingTop: insets.top + 8 }]}>
+      <ScreenContainer containerClassName="bg-white">
+        <LinearGradient colors={[BLUE, BLUE_LIGHT]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={st.header}>
           <Text style={st.headerTitle}>Current Job</Text>
         </LinearGradient>
         <View style={st.loadingContainer}>
@@ -223,9 +221,9 @@ export default function CurrentJobScreen() {
   }
 
   return (
-    <ScreenContainer edges={["left", "right"]} containerClassName="bg-white">
+    <ScreenContainer containerClassName="bg-white">
       {/* Header */}
-      <LinearGradient colors={[BLUE, BLUE_LIGHT]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={[st.header, { paddingTop: insets.top + 8 }]}>
+      <LinearGradient colors={[BLUE, BLUE_LIGHT]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={st.header}>
         <View style={st.headerRow}>
           <View style={{ flex: 1 }}>
             <Text style={st.headerTitle}>Current Job</Text>
