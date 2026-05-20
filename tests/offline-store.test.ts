@@ -71,8 +71,9 @@ describe("Offline Store", () => {
       id: "change-1",
       legName: "TL-00001",
       runSheetName: "RS-00001",
-      changes: { pick_time: "2024-01-15 10:30:00" },
-      timestamp: Date.now(),
+      changes: { start_date: "2024-01-15 10:30:00" },
+      timestamp: String(Date.now()),
+      synced: false,
     });
     const changes = await getPendingChanges();
     expect(changes.length).toBe(1);
@@ -103,15 +104,18 @@ describe("Profile Manager", () => {
   it("should add a profile", async () => {
     const { addProfile, getProfiles } = await import("../lib/profile-manager");
     await addProfile({
-      name: "Test Driver",
-      baseUrl: "https://erp.example.com",
+      siteUrl: "https://erp.example.com",
       apiKey: "key123",
       apiSecret: "secret123",
+      userName: "test@example.com",
+      fullName: "Test Driver",
+      driverName: "Test Driver",
+      driverId: "DRV-001",
       pin: "1234",
     });
     const profiles = await getProfiles();
     expect(profiles.length).toBe(1);
-    expect(profiles[0].name).toBe("Test Driver");
+    expect(profiles[0].fullName).toBe("Test Driver");
     expect(profiles[0].id).toBeDefined();
   });
 });

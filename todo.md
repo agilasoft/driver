@@ -31,3 +31,4 @@
 - [x] CargoNext branding (blue/orange theme, gradient headers)
 - [x] App icon (steering wheel on blue background)
 - [ ] Unit tests for offline store and API
+- [x] Fix: Add missing expo-location and expo-local-authentication to package.json (build failure)
