@@ -27,7 +27,10 @@ import {
   refreshBundle,
   addPendingChange,
   applyLocalChange,
+  addPendingStatusChange,
+  applyLocalStatusChange,
 } from "@/lib/offline-store";
+import { updateRunSheetStatus } from "@/lib/frappe-api";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -302,6 +305,40 @@ export default function CurrentJobScreen() {
           <MaterialIcons name="check-circle" size={40} color={GREEN} />
           <Text style={st.allDoneTitle}>All Legs Completed!</Text>
           <Text style={st.allDoneSub}>Great job. All {totalLegs} stops have been finalized.</Text>
+          {bundle?.doc.status !== "Completed" && (
+            <TouchableOpacity
+              style={st.completeJobBtn}
+              activeOpacity={0.8}
+              onPress={() => {
+                Alert.alert("Complete Job", "Mark this run sheet as Completed?", [
+                  { text: "Cancel", style: "cancel" },
+                  {
+                    text: "Complete",
+                    style: "default",
+                    onPress: async () => {
+                      try {
+                        if (isOnline && currentJobId) {
+                          await updateRunSheetStatus(currentJobId, "Completed");
+                        } else if (currentJobId) {
+                          await addPendingStatusChange({ runSheetName: currentJobId, status: "Completed", timestamp: new Date().toISOString() });
+                        }
+                        if (currentJobId) {
+                          await applyLocalStatusChange(currentJobId, "Completed");
+                        }
+                        await loadData();
+                        Alert.alert("Done", "Run sheet marked as Completed.");
+                      } catch (e: any) {
+                        Alert.alert("Error", e?.message || "Failed to update status");
+                      }
+                    },
+                  },
+                ]);
+              }}
+            >
+              <MaterialIcons name="done-all" size={20} color="#fff" />
+              <Text style={st.completeJobBtnText}>Complete Job</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
 
@@ -473,6 +510,21 @@ const st = StyleSheet.create({
     fontSize: 14,
     color: GRAY,
     textAlign: "center",
+  },
+  completeJobBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: GREEN,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginTop: 12,
+  },
+  completeJobBtnText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#fff",
   },
 
   // Leg cards

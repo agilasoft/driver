@@ -56,6 +56,12 @@ export interface TransportLeg {
   // Delivery notes/comments
   pick_notes?: string;
   drop_notes?: string;
+  // Sign timestamps (auto-set on save if signature present)
+  pick_signed_at?: string;
+  drop_signed_at?: string;
+  // Photo attachments
+  pick_photo?: string;
+  drop_photo?: string;
   // Aliases from API
   signature?: string;
   signed_by?: string;

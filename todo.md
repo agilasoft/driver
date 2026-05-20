@@ -96,3 +96,8 @@
 - [x] Fix: Cannot select current run sheet from Run Sheets tab
 - [x] Fix: PIN entry screen is flickering
 - [x] Fix: GPS location is flickering — check if permissions are properly requested
+- [x] Feature: Display captured signature drawing on Leg Detail screen (render SVG paths)
+- [x] Update: Transport Leg fields — added pick_signed_at, drop_signed_at, pick_photo, drop_photo
+- [x] Feature: Add "Complete Job" button on Current Job screen when all legs are done
+- [x] Feature: Removed 1-minute session timeout option to prevent navigation issues
+- [x] Fix: Reverted to working version (92e3ee00) — removed +native-intent.tsx and +not-found.tsx that were breaking route navigation
