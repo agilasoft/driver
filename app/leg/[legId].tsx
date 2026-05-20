@@ -28,10 +28,7 @@ import {
   addPendingChange,
 } from "@/lib/offline-store";
 import { useAuth } from "@/lib/auth-context";
-import { useSessionTimeout } from "@/lib/session-timeout";
-import { useCurrentJob } from "@/lib/current-job";
 import { resolveCoordinates } from "@/lib/geocoding";
-import { SignaturePreview } from "@/components/signature-preview";
 
 const BLUE = "#3478C6";
 const ORANGE = "#F27A2E";
@@ -49,15 +46,11 @@ interface BarcodeRecord {
 }
 
 export default function LegDetailScreen() {
-  const { legId, runSheetId: paramRunSheetId } = useLocalSearchParams<{ legId: string; runSheetId: string }>();
+  const { legId, runSheetId } = useLocalSearchParams<{ legId: string; runSheetId: string }>();
   const router = useRouter();
   const { refreshPendingCount } = useSync();
   const { captureLocation, isCapturing } = useLocationCapture();
   const { auth } = useAuth();
-  const { recordActivity } = useSessionTimeout();
-  const { currentJobId } = useCurrentJob();
-  // Use runSheetId from params, fall back to currentJobId from context
-  const runSheetId = paramRunSheetId || currentJobId || "";
 
   const [leg, setLeg] = useState<TransportLeg | null>(null);
   // Destination coordinates resolved from addresses (for navigation)
@@ -82,34 +75,13 @@ export default function LegDetailScreen() {
   const [dropNotes, setDropNotes] = useState("");
 
   const loadLeg = useCallback(async () => {
-    if (!legId) return;
+    if (!runSheetId || !legId) return;
     setIsLoading(true);
     try {
-      // Try to find the leg in the specified run sheet bundle
-      let found: TransportLeg | undefined;
-      if (runSheetId) {
-        const bundle = await getCachedBundle(runSheetId);
-        if (bundle) {
-          found = bundle.legs.find((l) => l.name === legId);
-        }
-      }
-      // Fallback: search all cached bundles if not found
-      if (!found) {
-        const allKeys = await AsyncStorage.getAllKeys();
-        const bundleKeys = allKeys.filter((k) => k.startsWith("offline_bundle_"));
-        for (const key of bundleKeys) {
-          const raw = await AsyncStorage.getItem(key);
-          if (raw) {
-            const b = JSON.parse(raw);
-            const match = b?.legs?.find((l: any) => l.name === legId);
-            if (match) {
-              found = match;
-              break;
-            }
-          }
-        }
-      }
-      if (found) {
+      const bundle = await getCachedBundle(runSheetId);
+      if (bundle) {
+        const found = bundle.legs.find((l) => l.name === legId);
+        if (found) {
           setLeg(found);
           setPickSignedBy(found.pick_signed_by || "");
           setDropSignedBy(found.drop_signed_by || "");
@@ -149,6 +121,7 @@ export default function LegDetailScreen() {
           }).then((coords) => {
             if (coords) setDropDestCoords({ latitude: coords.latitude, longitude: coords.longitude });
           }).catch(() => {});
+        }
       }
     } catch (error) {
       console.warn("Failed to load leg:", error);
@@ -171,7 +144,6 @@ export default function LegDetailScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      recordActivity();
       (async () => {
         if (!legId) return;
         const pickFlag = await AsyncStorage.getItem(`sig_flag_${legId}_pick`);
@@ -186,7 +158,7 @@ export default function LegDetailScreen() {
         }
         await loadBarcodes();
       })();
-    }, [legId, loadBarcodes, recordActivity])
+    }, [legId, loadBarcodes])
   );
 
   const recordTimestamp = async (type: "pick" | "drop") => {
@@ -227,7 +199,6 @@ export default function LegDetailScreen() {
   };
 
   const handleSave = async () => {
-    recordActivity();
     if (!leg || !runSheetId) return;
     setIsSaving(true);
     try {
@@ -432,14 +403,12 @@ export default function LegDetailScreen() {
               <View style={st.fieldSpacer} />
 
               <FieldLabel label="Signature" />
-              <TouchableOpacity style={[st.signatureBtn, pickSignature ? st.signatureBtnWithPreview : undefined]} onPress={() => captureSignature("pick")} activeOpacity={0.7}>
+              <TouchableOpacity style={st.signatureBtn} onPress={() => captureSignature("pick")} activeOpacity={0.7}>
                 {pickSignature ? (
-                  <View style={st.signaturePreviewContainer}>
-                    <SignaturePreview pathData={pickSignature} width={260} height={70} />
-                    <View style={st.signatureRedoRow}>
-                      <MaterialIcons name="check-circle" size={14} color={GREEN} />
-                      <Text style={st.signatureRedoText}>Tap to redo</Text>
-                    </View>
+                  <View style={st.signatureCaptured}>
+                    <MaterialIcons name="check-circle" size={24} color={GREEN} />
+                    <Text style={[st.signatureText, { color: GREEN }]}>Signature captured</Text>
+                    <Text style={st.signatureTap}>Tap to redo</Text>
                   </View>
                 ) : (
                   <View style={st.signatureEmpty}>
@@ -524,14 +493,12 @@ export default function LegDetailScreen() {
               <View style={st.fieldSpacer} />
 
               <FieldLabel label="Signature" />
-              <TouchableOpacity style={[st.signatureBtn, dropSignature ? st.signatureBtnWithPreview : undefined]} onPress={() => captureSignature("drop")} activeOpacity={0.7}>
+              <TouchableOpacity style={st.signatureBtn} onPress={() => captureSignature("drop")} activeOpacity={0.7}>
                 {dropSignature ? (
-                  <View style={st.signaturePreviewContainer}>
-                    <SignaturePreview pathData={dropSignature} width={260} height={70} />
-                    <View style={st.signatureRedoRow}>
-                      <MaterialIcons name="check-circle" size={14} color={GREEN} />
-                      <Text style={st.signatureRedoText}>Tap to redo</Text>
-                    </View>
+                  <View style={st.signatureCaptured}>
+                    <MaterialIcons name="check-circle" size={24} color={GREEN} />
+                    <Text style={[st.signatureText, { color: GREEN }]}>Signature captured</Text>
+                    <Text style={st.signatureTap}>Tap to redo</Text>
                   </View>
                 ) : (
                   <View style={st.signatureEmpty}>
@@ -653,10 +620,7 @@ const st = StyleSheet.create({
   gpsText: { fontSize: 12, fontWeight: "500" },
   gpsAccuracy: { fontSize: 12, marginLeft: 2, color: GRAY },
   signatureBtn: { borderRadius: 12, borderWidth: 1, borderColor: BORDER, height: 100, alignItems: "center", justifyContent: "center", backgroundColor: SURFACE },
-  signatureBtnWithPreview: { height: 110, paddingVertical: 8 },
-  signaturePreviewContainer: { alignItems: "center", gap: 4 },
-  signatureRedoRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-  signatureRedoText: { fontSize: 11, color: GRAY },
+  signatureCaptured: { alignItems: "center", gap: 4 },
   signatureEmpty: { alignItems: "center", gap: 6 },
   signatureText: { fontSize: 14, fontWeight: "600" },
   signatureTap: { fontSize: 12, color: GRAY },

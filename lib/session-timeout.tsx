@@ -153,9 +153,9 @@ export function useSessionTimeout() {
 }
 
 // Available timeout options for settings UI
-// Note: Session timeout no longer auto-redirects. It only tracks idle time for future use.
 export const TIMEOUT_OPTIONS = [
   { label: "Disabled", value: 0 },
+  { label: "1 minute", value: 1 },
   { label: "5 minutes", value: 5 },
   { label: "15 minutes", value: 15 },
   { label: "30 minutes", value: 30 },

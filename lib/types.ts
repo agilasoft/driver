@@ -45,9 +45,6 @@ export interface TransportLeg {
   drop_signature: string;
   drop_signed_by: string;
   date_signed: string;
-  // New sign-time fields (auto-set by backend if signature present)
-  pick_signed_at?: string;
-  drop_signed_at?: string;
   status: LegStatus;
   actual_distance_km: number;
   actual_duration_min: number;
@@ -59,9 +56,6 @@ export interface TransportLeg {
   // Delivery notes/comments
   pick_notes?: string;
   drop_notes?: string;
-  // Photos (Attach Image — uploaded via Frappe upload_file)
-  pick_photo?: string;
-  drop_photo?: string;
   // Aliases from API
   signature?: string;
   signed_by?: string;

@@ -375,10 +375,9 @@ export async function fetchRunSheetBundle(
     "facility_type_to", "facility_to", "drop_address",
     "start_date", "end_date", "distance_km", "duration_min",
     "pick_signature", "pick_signed_by", "drop_signature", "drop_signed_by",
-    "date_signed", "pick_signed_at", "drop_signed_at",
-    "status", "actual_distance_km", "actual_duration_min",
+    "date_signed", "status", "actual_distance_km", "actual_duration_min",
     "pick_latitude", "pick_longitude", "drop_latitude", "drop_longitude",
-    "pick_notes", "drop_notes", "pick_photo", "drop_photo"
+    "pick_notes", "drop_notes"
   ]);
 
   // Try fetching legs from Run Sheet Leg child table

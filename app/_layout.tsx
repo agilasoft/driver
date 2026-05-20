@@ -1,6 +1,6 @@
 import "@/global.css";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack, useRouter, usePathname } from "expo-router";
+import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -31,6 +31,7 @@ import {
   startAssignmentPolling,
   stopAssignmentPolling,
 } from "@/lib/notifications";
+import { useRouter } from "expo-router";
 import * as Notifications from "expo-notifications";
 
 const DEFAULT_WEB_INSETS: EdgeInsets = { top: 0, right: 0, bottom: 0, left: 0 };
@@ -40,17 +41,9 @@ const DEFAULT_WEB_FRAME: Rect = { x: 0, y: 0, width: 0, height: 0 };
 configureNotifications();
 
 function AppNavigator() {
-  const { auth, isLoading } = useAuth();
-  const { recordActivity } = useSessionTimeout();
+  const { auth, isLoading, activeProfile, signOut } = useAuth();
+  const { isTimedOut, resetTimeout, recordActivity } = useSessionTimeout();
   const router = useRouter();
-  const pathname = usePathname();
-
-  // Global activity tracker: any navigation change = user is active
-  useEffect(() => {
-    if (pathname) {
-      recordActivity();
-    }
-  }, [pathname, recordActivity]);
 
   // Start/stop assignment polling based on auth state
   useEffect(() => {
@@ -82,9 +75,16 @@ function AppNavigator() {
     return () => subscription.remove();
   }, [auth?.isLoggedIn, router]);
 
-  // Navigation guard: DISABLED — session timeout does not auto-redirect.
-  // The timeout feature only shows a lock overlay if re-enabled in the future.
-  // This was causing false redirects to profile-picker during active navigation.
+  // Auto-lock on session timeout
+  useEffect(() => {
+    if (isTimedOut && auth?.isLoggedIn && activeProfile) {
+      signOut().then(() => {
+        router.replace("/profile-picker");
+      });
+    }
+  }, [isTimedOut, auth?.isLoggedIn, activeProfile, signOut, router]);
+
+  const isUnlocked = auth?.isLoggedIn && activeProfile && !isTimedOut;
 
   if (isLoading) {
     return (
@@ -97,20 +97,22 @@ function AppNavigator() {
   return (
     <>
       <Stack screenOptions={{ headerShown: false }}>
-        {/* All routes are always registered — no conditional mounting */}
+        {/* Root index always redirects to profile-picker */}
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="profile-picker" options={{ headerShown: false }} />
         <Stack.Screen name="login" options={{ presentation: "fullScreenModal", headerShown: false }} />
         <Stack.Screen name="config-scanner" options={{ presentation: "modal", headerShown: true }} />
         <Stack.Screen name="edit-profile" options={{ presentation: "fullScreenModal", headerShown: false }} />
         <Stack.Screen name="oauth/callback" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="run-sheet/[id]" options={{ headerShown: true }} />
-        <Stack.Screen name="leg/[legId]" options={{ headerShown: true }} />
-        <Stack.Screen name="signature-modal" options={{ presentation: "modal", headerShown: true }} />
-        <Stack.Screen name="barcode-scanner" options={{ presentation: "modal", headerShown: true }} />
-        <Stack.Screen name="dev/theme-lab" options={{ headerShown: true }} />
-        <Stack.Screen name="+not-found" options={{ headerShown: false }} />
+        {isUnlocked ? (
+          <>
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="run-sheet/[id]" options={{ headerShown: true }} />
+            <Stack.Screen name="leg/[legId]" options={{ headerShown: true }} />
+            <Stack.Screen name="signature-modal" options={{ presentation: "modal", headerShown: true }} />
+            <Stack.Screen name="barcode-scanner" options={{ presentation: "modal", headerShown: true }} />
+          </>
+        ) : null}
       </Stack>
       <StatusBar style="auto" />
     </>

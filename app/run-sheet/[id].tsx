@@ -27,7 +27,6 @@ import {
 import { updateRunSheetStatus } from "@/lib/frappe-api";
 import { generateRunSheetPdf } from "@/lib/pdf-generator";
 import { useAuth } from "@/lib/auth-context";
-import { useSessionTimeout } from "@/lib/session-timeout";
 import { resolveAllLegCoordinates } from "@/lib/geocoding";
 import { useGeofence, buildGeofenceTargets } from "@/lib/geofence";
 
@@ -46,7 +45,6 @@ export default function RunSheetDetailScreen() {
   const router = useRouter();
   const { isOnline, refreshPendingCount } = useSync();
   const { auth } = useAuth();
-  const { recordActivity } = useSessionTimeout();
   const [bundle, setBundle] = useState<RunSheetBundle | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -286,7 +284,7 @@ export default function RunSheetDetailScreen() {
 
     return (
       <TouchableOpacity
-        onPress={() => { recordActivity(); router.push({ pathname: "/leg/[legId]", params: { legId: item.name, runSheetId: id || "" } } as any); }}
+        onPress={() => router.push({ pathname: "/leg/[legId]", params: { legId: item.name, runSheetId: id || "" } })}
         activeOpacity={0.7}
         style={[
           st.legCard,
